@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { PieChart, Pie, Cell, Sector, ResponsiveContainer, type PieSectorDataItem } from "recharts";
-import { GITHUB_LANGUAGE_COLORS, getRandomColor } from "@/lib/constants";
+import { GITHUB_LANGUAGE_COLORS, getRandomColor } from "../lib/constants";
 
 const renderActiveShape = ({ cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent }: PieSectorDataItem) => {
   const RADIAN = Math.PI / 180;

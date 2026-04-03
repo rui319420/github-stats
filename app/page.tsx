@@ -1,4 +1,4 @@
-import LanguagePieChart from "@/components/LanguagePieChart";
+import LanguagePieChart from "./components/LanguagePieChart";
 
 export default function Home() {
   return (
