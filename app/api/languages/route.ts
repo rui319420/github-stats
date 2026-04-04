@@ -2,6 +2,8 @@ import { Octokit } from "@octokit/rest";
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
+const EXCLUDED_LANGUAGES = new Set(["ShaderLab", "HLSL", "GLSL", "Jupyter Notebook"]);
+
 export async function GET() {
   const repos = await octokit.repos.listForUser({
     username: process.env.GITHUB_USERNAME!,
@@ -16,6 +18,7 @@ export async function GET() {
         repo: repo.name,
       });
       for (const [lang, bytes] of Object.entries(data)) {
+        if (EXCLUDED_LANGUAGES.has(lang)) continue;
         langMap[lang] = (langMap[lang] ?? 0) + bytes;
       }
     })

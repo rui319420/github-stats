@@ -104,8 +104,7 @@ export default function LanguagePieChart() {
   return (
     <div className="flex h-[450px] w-full flex-col rounded-xl border border-[#2ea043]/40 bg-[#0d1117] p-4 shadow-[0_0_20px_rgba(46,160,67,0.15)] md:p-6">
       <div className="mb-4">
-        <h2 className="text-xl font-bold tracking-wider text-[#F2F3F5]">言語割合</h2>
-        <p className="mt-0.5 text-xs text-[#636e7b]">GitHub Linguistを用いて集計</p>
+        <h2 className="text-xl font-bold tracking-wider text-[#F2F3F5]">Language Distribution</h2>
       </div>
       {loading ? (
         <div className="flex flex-1 items-center justify-center">
@@ -114,16 +113,16 @@ export default function LanguagePieChart() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
-            集計中...
+            Loading...
           </div>
         </div>
       ) : data.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-center text-sm text-[#636e7b]">データがありません</p>
+          <p className="text-center text-sm text-[#636e7b]">No data available</p>
         </div>
       ) : (
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart margin={{ top: 20, right: 60, bottom: 0, left: 60 }}>
+          <PieChart margin={{ top: 20, right: 0, bottom: 0, left: 0 }}>
             <Pie data={data} cx="50%" cy="50%" innerRadius="50%" outerRadius="70%" dataKey="percentage" stroke="none" shape={renderShape}
               onMouseEnter={(_, index) => { stopLoop(); setActiveIndex(index); activeIndexRef.current = index; }}
               onMouseLeave={() => startLoop(RESUME_DELAY_MS)}
