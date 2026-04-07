@@ -51,6 +51,7 @@ const INITIAL_DELAY_MS = 1000;
 const RESUME_DELAY_MS = 100;
 
 export default function LanguagePieChart() {
+  const [mounted, setMounted] = useState(false);
   const [data, setData] = useState<LangData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -81,6 +82,10 @@ export default function LanguagePieChart() {
   }, [activeIndex]);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -106,7 +111,7 @@ export default function LanguagePieChart() {
       <div className="mb-4">
         <h2 className="text-xl font-bold tracking-wider text-[#F2F3F5]">Language Distribution</h2>
       </div>
-      {loading ? (
+      {!mounted || loading ? (
         <div className="flex flex-1 items-center justify-center">
           <div className="flex items-center gap-2 text-[#949BA4]">
             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -121,9 +126,10 @@ export default function LanguagePieChart() {
           <p className="text-center text-sm text-[#636e7b]">No data available</p>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart margin={{ top: 20, right: 0, bottom: 0, left: 0 }}>
-            <Pie data={data} cx="50%" cy="50%" innerRadius="50%" outerRadius="70%" dataKey="percentage" stroke="none" shape={renderShape}
+        <div className="flex-1 min-h-[280px] min-w-0">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
+            <PieChart margin={{ top: 20, right: 0, bottom: 0, left: 0 }}>
+              <Pie data={data} cx="50%" cy="50%" innerRadius="50%" outerRadius="70%" dataKey="percentage" stroke="none" shape={renderShape}
               onMouseEnter={(_, index) => { stopLoop(); setActiveIndex(index); activeIndexRef.current = index; }}
               onMouseLeave={() => startLoop(RESUME_DELAY_MS)}
             >
@@ -132,7 +138,8 @@ export default function LanguagePieChart() {
               ))}
             </Pie>
           </PieChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );
