@@ -46,6 +46,12 @@ interface LangData {
   percentage: number;
 }
 
+interface LanguagesApiResponse {
+  username?: string;
+  languages?: LangData[];
+  error?: string;
+}
+
 const INTERVAL_MS = 2000;
 const INITIAL_DELAY_MS = 1000;
 const RESUME_DELAY_MS = 100;
@@ -54,6 +60,9 @@ export default function LanguagePieChart() {
   const [mounted, setMounted] = useState(false);
   const [data, setData] = useState<LangData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [usernameInput, setUsernameInput] = useState("");
+  const [activeUsername, setActiveUsername] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
   const dataLengthRef = useRef(0);
@@ -85,31 +94,86 @@ export default function LanguagePieChart() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/languages?t=${Date.now()}`);
-        const finalData = await res.json();
-        setData(finalData);
-        dataLengthRef.current = finalData?.length || 0;
-        activeIndexRef.current = 0;
-        setActiveIndex(0);
-        startLoop(INITIAL_DELAY_MS);
-      } catch (e) {
-        console.error("Language fetch failed:", e);
-      } finally {
-        setLoading(false);
+  const fetchData = useCallback(async (username?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      const trimmed = username?.trim();
+      if (trimmed) params.set("username", trimmed);
+      params.set("t", String(Date.now()));
+      const query = params.toString();
+      const res = await fetch(`/api/languages?${query}`);
+      const payload = (await res.json()) as LanguagesApiResponse;
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Language fetch failed.");
       }
-    };
-    fetchData();
-    return () => stopLoop();
+
+      const finalData = payload.languages ?? [];
+      setData(finalData);
+      setActiveUsername(payload.username ?? trimmed ?? "");
+      if (!trimmed && payload.username) {
+        setUsernameInput(payload.username);
+      }
+
+      dataLengthRef.current = finalData.length;
+      activeIndexRef.current = 0;
+      setActiveIndex(0);
+      if (finalData.length > 0) {
+        startLoop(INITIAL_DELAY_MS);
+      } else {
+        stopLoop();
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Language fetch failed.";
+      setError(message);
+      setData([]);
+      stopLoop();
+    } finally {
+      setLoading(false);
+    }
   }, [startLoop, stopLoop]);
+
+  useEffect(() => {
+    const initialUsername = new URLSearchParams(window.location.search).get("username")?.trim() ?? "";
+    if (initialUsername) setUsernameInput(initialUsername);
+    fetchData(initialUsername);
+    return () => stopLoop();
+  }, [fetchData, stopLoop]);
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = usernameInput.trim();
+    const url = new URL(window.location.href);
+    if (trimmed) {
+      url.searchParams.set("username", trimmed);
+    } else {
+      url.searchParams.delete("username");
+    }
+    window.history.replaceState({}, "", url);
+    fetchData(trimmed);
+  };
 
   return (
     <div className="flex h-[450px] w-full flex-col rounded-xl border border-[#2ea043]/40 bg-[#0d1117] p-4 shadow-[0_0_20px_rgba(46,160,67,0.15)] md:p-6">
       <div className="mb-4">
         <h2 className="text-xl font-bold tracking-wider text-[#F2F3F5]">Language Distribution</h2>
+        <p className="mt-1 text-xs text-[#949BA4]">{activeUsername ? `User: ${activeUsername}` : "User not selected"}</p>
+        <form className="mt-3 flex gap-2" onSubmit={handleSubmit}>
+          <input
+            value={usernameInput}
+            onChange={(event) => setUsernameInput(event.target.value)}
+            placeholder="GitHub username"
+            className="h-9 flex-1 rounded-md border border-[#2d3748] bg-[#161b22] px-3 text-sm text-[#F2F3F5] outline-none transition focus:border-[#2ea043]"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="h-9 rounded-md bg-[#2ea043] px-4 text-sm font-semibold text-white transition hover:bg-[#3fb950] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            Load
+          </button>
+        </form>
       </div>
       {!mounted || loading ? (
         <div className="flex flex-1 items-center justify-center">
@@ -123,7 +187,7 @@ export default function LanguagePieChart() {
         </div>
       ) : data.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-center text-sm text-[#636e7b]">No data available</p>
+          <p className="text-center text-sm text-[#636e7b]">{error ?? "No data available"}</p>
         </div>
       ) : (
         <div className="flex-1 min-h-[280px] min-w-0">
