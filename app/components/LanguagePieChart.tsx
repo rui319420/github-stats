@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { PieChart, Pie, Cell, Sector, ResponsiveContainer, type PieSectorDataItem } from "recharts";
 import { GITHUB_LANGUAGE_COLORS, getRandomColor } from "../lib/constants";
 
-const renderActiveShape = ({ cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent }: PieSectorDataItem) => {
+const renderActiveShape = ({
+  cx, cy, midAngle, innerRadius, outerRadius,
+  startAngle, endAngle, fill, payload, percent,
+}: PieSectorDataItem) => {
   const RADIAN = Math.PI / 180;
   const sin = Math.sin(-RADIAN * (midAngle ?? 0));
   const cos = Math.cos(-RADIAN * (midAngle ?? 0));
@@ -48,6 +51,8 @@ interface LangData {
 
 interface LanguagesApiResponse {
   username?: string;
+  includePrivate?: boolean;
+  repositoryCount?: number;
   languages?: LangData[];
   error?: string;
 }
@@ -63,6 +68,9 @@ export default function LanguagePieChart() {
   const [error, setError] = useState<string | null>(null);
   const [usernameInput, setUsernameInput] = useState("");
   const [activeUsername, setActiveUsername] = useState("");
+  const [includePrivate, setIncludePrivate] = useState(false);
+  const [repositoryCount, setRepositoryCount] = useState(0);
+  const [copied, setCopied] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const dataLengthRef = useRef(0);
@@ -87,23 +95,48 @@ export default function LanguagePieChart() {
 
   const renderShape = useCallback((props: PieSectorDataItem & { index?: number }) => {
     if (props.index === activeIndex) return renderActiveShape(props);
-    return <Sector cx={props.cx} cy={props.cy} innerRadius={props.innerRadius} outerRadius={props.outerRadius} startAngle={props.startAngle} endAngle={props.endAngle} fill={props.fill} />;
+    return (
+      <Sector
+        cx={props.cx}
+        cy={props.cy}
+        innerRadius={props.innerRadius}
+        outerRadius={props.outerRadius}
+        startAngle={props.startAngle}
+        endAngle={props.endAngle}
+        fill={props.fill}
+      />
+    );
   }, [activeIndex]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const fetchData = useCallback(async (username?: string) => {
+  const buildImageUrl = useCallback((username: string, privateScope: boolean) => {
+    if (typeof window === "undefined") return "";
+    const params = new URLSearchParams();
+    if (username.trim()) params.set("username", username.trim());
+    if (privateScope) params.set("include_private", "true");
+    return `${window.location.origin}/api/languages.svg?${params.toString()}`;
+  }, []);
+
+  const markdown = useMemo(() => {
+    const imageUrl = buildImageUrl(activeUsername || usernameInput, includePrivate);
+    if (!imageUrl) return "";
+    return `[![GitHub Language Stats](${imageUrl})](${window.location.origin})`;
+  }, [activeUsername, buildImageUrl, includePrivate, usernameInput]);
+
+  const fetchData = useCallback(async (username: string, privateScope: boolean) => {
     setLoading(true);
     setError(null);
+    setCopied(false);
     try {
       const params = new URLSearchParams();
-      const trimmed = username?.trim();
+      const trimmed = username.trim();
       if (trimmed) params.set("username", trimmed);
+      if (privateScope) params.set("include_private", "true");
       params.set("t", String(Date.now()));
-      const query = params.toString();
-      const res = await fetch(`/api/languages?${query}`);
+      const res = await fetch(`/api/languages?${params.toString()}`);
       const payload = (await res.json()) as LanguagesApiResponse;
       if (!res.ok) {
         throw new Error(payload.error ?? "Language fetch failed.");
@@ -111,10 +144,9 @@ export default function LanguagePieChart() {
 
       const finalData = payload.languages ?? [];
       setData(finalData);
-      setActiveUsername(payload.username ?? trimmed ?? "");
-      if (!trimmed && payload.username) {
-        setUsernameInput(payload.username);
-      }
+      setActiveUsername(payload.username ?? trimmed);
+      setRepositoryCount(payload.repositoryCount ?? 0);
+      if (!trimmed && payload.username) setUsernameInput(payload.username);
 
       dataLengthRef.current = finalData.length;
       activeIndexRef.current = 0;
@@ -128,6 +160,7 @@ export default function LanguagePieChart() {
       const message = e instanceof Error ? e.message : "Language fetch failed.";
       setError(message);
       setData([]);
+      setRepositoryCount(0);
       stopLoop();
     } finally {
       setLoading(false);
@@ -135,9 +168,12 @@ export default function LanguagePieChart() {
   }, [startLoop, stopLoop]);
 
   useEffect(() => {
-    const initialUsername = new URLSearchParams(window.location.search).get("username")?.trim() ?? "";
-    if (initialUsername) setUsernameInput(initialUsername);
-    fetchData(initialUsername);
+    const params = new URLSearchParams(window.location.search);
+    const initialUsername = params.get("username")?.trim() ?? "";
+    const initialPrivate = params.get("include_private") === "true";
+    setUsernameInput(initialUsername);
+    setIncludePrivate(initialPrivate);
+    fetchData(initialUsername, initialPrivate);
     return () => stopLoop();
   }, [fetchData, stopLoop]);
 
@@ -150,33 +186,56 @@ export default function LanguagePieChart() {
     } else {
       url.searchParams.delete("username");
     }
+    if (includePrivate) {
+      url.searchParams.set("include_private", "true");
+    } else {
+      url.searchParams.delete("include_private");
+    }
     window.history.replaceState({}, "", url);
-    fetchData(trimmed);
+    fetchData(trimmed, includePrivate);
+  };
+
+  const copyMarkdown = async () => {
+    if (!markdown) return;
+    await navigator.clipboard.writeText(markdown);
+    setCopied(true);
   };
 
   return (
-    <div className="flex h-[450px] w-full flex-col rounded-xl border border-[#2ea043]/40 bg-[#0d1117] p-4 shadow-[0_0_20px_rgba(46,160,67,0.15)] md:p-6">
+    <div className="flex w-full flex-col rounded-lg border border-[#2ea043]/40 bg-[#0d1117] p-4 shadow-[0_0_20px_rgba(46,160,67,0.15)] md:p-6">
       <div className="mb-4">
         <h2 className="text-xl font-bold tracking-wider text-[#F2F3F5]">Language Distribution</h2>
-        <p className="mt-1 text-xs text-[#949BA4]">{activeUsername ? `User: ${activeUsername}` : "User not selected"}</p>
-        <form className="mt-3 flex gap-2" onSubmit={handleSubmit}>
+        <p className="mt-1 text-xs text-[#949BA4]">
+          {activeUsername ? `@${activeUsername} · ${repositoryCount} repositories` : "Loading..."}
+        </p>
+        <form className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={handleSubmit}>
           <input
             value={usernameInput}
             onChange={(event) => setUsernameInput(event.target.value)}
             placeholder="GitHub username"
-            className="h-9 flex-1 rounded-md border border-[#2d3748] bg-[#161b22] px-3 text-sm text-[#F2F3F5] outline-none transition focus:border-[#2ea043]"
+            className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm text-[#F2F3F5] outline-none transition focus:border-[#2ea043]"
           />
           <button
             type="submit"
             disabled={loading}
-            className="h-9 rounded-md bg-[#2ea043] px-4 text-sm font-semibold text-white transition hover:bg-[#3fb950] disabled:cursor-not-allowed disabled:opacity-70"
+            className="h-10 rounded-md bg-[#238636] px-5 text-sm font-semibold text-white transition hover:bg-[#2ea043] disabled:cursor-not-allowed disabled:opacity-70"
           >
             Load
           </button>
+          <label className="flex items-center gap-2 text-sm text-[#c9d1d9] md:col-span-2">
+            <input
+              type="checkbox"
+              checked={includePrivate}
+              onChange={(event) => setIncludePrivate(event.target.checked)}
+              className="h-4 w-4 accent-[#2ea043]"
+            />
+            Include private repositories
+          </label>
         </form>
       </div>
+
       {!mounted || loading ? (
-        <div className="flex flex-1 items-center justify-center">
+        <div className="flex h-[290px] items-center justify-center">
           <div className="flex items-center gap-2 text-[#949BA4]">
             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -186,25 +245,57 @@ export default function LanguagePieChart() {
           </div>
         </div>
       ) : data.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center">
+        <div className="flex h-[290px] items-center justify-center">
           <p className="text-center text-sm text-[#636e7b]">{error ?? "No data available"}</p>
         </div>
       ) : (
-        <div className="flex-1 min-h-[280px] min-w-0">
+        <div className="h-[290px] min-w-0">
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
             <PieChart margin={{ top: 20, right: 0, bottom: 0, left: 0 }}>
-              <Pie data={data} cx="50%" cy="50%" innerRadius="50%" outerRadius="70%" dataKey="percentage" stroke="none" shape={renderShape}
-              onMouseEnter={(_, index) => { stopLoop(); setActiveIndex(index); activeIndexRef.current = index; }}
-              onMouseLeave={() => startLoop(RESUME_DELAY_MS)}
-            >
-              {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={GITHUB_LANGUAGE_COLORS[entry.name] ?? getRandomColor(entry.name)} />
-              ))}
-            </Pie>
-          </PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                innerRadius="50%"
+                outerRadius="70%"
+                dataKey="percentage"
+                stroke="none"
+                shape={renderShape}
+                onMouseEnter={(_, index) => {
+                  stopLoop();
+                  setActiveIndex(index);
+                  activeIndexRef.current = index;
+                }}
+                onMouseLeave={() => startLoop(RESUME_DELAY_MS)}
+              >
+                {data.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={GITHUB_LANGUAGE_COLORS[entry.name] ?? getRandomColor(entry.name)}
+                  />
+                ))}
+              </Pie>
+            </PieChart>
           </ResponsiveContainer>
         </div>
       )}
+      <div className="mt-4 border-t border-[#30363d] pt-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+          <input
+            readOnly
+            value={markdown}
+            className="h-10 flex-1 rounded-md border border-[#30363d] bg-[#161b22] px-3 font-mono text-xs text-[#c9d1d9] outline-none"
+          />
+          <button
+            type="button"
+            onClick={copyMarkdown}
+            disabled={!markdown}
+            className="h-10 rounded-md border border-[#3d444d] px-4 text-sm font-semibold text-[#f0f6fc] transition hover:border-[#8b949e] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {copied ? "Copied" : "Copy Markdown"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

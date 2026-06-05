@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "GitHub Stats",
-  description: "My GitHub language statistics",
+  description: "Generate a GitHub language usage card for your profile README.",
 };
 
 export default function RootLayout({
