@@ -1,88 +1,177 @@
 # GitHub Stats
 
-GitHub profile READMEに貼れる、言語使用率カードを生成するNext.jsアプリです。
+Beautiful GitHub language usage cards for profile READMEs.
+
+Show what you actually build with, including private repositories when the user opts in with GitHub OAuth.
+
+```md
+[![GitHub Language Stats](https://your-app.vercel.app/api/languages.svg?username=YOUR_GITHUB_USERNAME)](https://your-app.vercel.app)
+```
+
+## Why
+
+Most GitHub stats cards only show public activity. This project focuses on one thing: a clean language distribution card that can also include private repositories without exposing repository names or source code.
+
+Users can choose:
+
+- Public repositories only
+- Public + private repositories through GitHub OAuth
+- A copy-ready Markdown snippet for their profile README
 
 ## Features
 
-- Public repositoriesの言語使用率をSVGカードで表示
-- GitHub OAuth loginでprivate repositoriesも集計
-- Web UIでusername、private集計、貼り付け用Markdownを生成
-- GitHub READMEで表示しやすい`image/svg+xml`エンドポイント
+- SVG card endpoint that works in GitHub profile READMEs
+- Public repository language stats for any GitHub username
+- GitHub OAuth login for private repository language stats
+- Copy-ready Markdown generator in the web UI
+- Encrypted `card_token` support for private README cards
+- JSON API for custom clients
+- Built with Next.js App Router, React, Recharts, and Octokit
 
-## Profile README
+## Quick Start
 
-デプロイ後、プロフィールREADMEに以下を貼り付けます。
-
-```md
-[![GitHub Language Stats](https://your-domain.example/api/languages.svg?username=YOUR_GITHUB_USERNAME)](https://your-domain.example)
-```
-
-Private repositoriesも含めたい場合は、トップページでGitHubログインし、`Include private repositories`をオンにして生成されたMarkdownを貼り付けます。private用URLには暗号化された`card_token`が付きます。
-
-```md
-[![GitHub Language Stats](https://your-domain.example/api/languages.svg?username=YOUR_GITHUB_USERNAME&include_private=true&card_token=...)](https://your-domain.example)
-```
-
-## Environment Variables
+Clone and install:
 
 ```bash
-GITHUB_USERNAME=YOUR_GITHUB_USERNAME
-GITHUB_TOKEN=github_pat_or_classic_token
-AUTH_SECRET=random_32_bytes_or_longer_secret
-AUTH_GITHUB_ID=github_oauth_app_client_id
-AUTH_GITHUB_SECRET=github_oauth_app_client_secret
-NEXTAUTH_URL=https://your-domain.example
+git clone https://github.com/YOUR_NAME/github-stats.git
+cd github-stats
+npm install
 ```
 
-`GITHUB_USERNAME`は、URLに`username`を指定しない場合のデフォルトです。
+Create `.env.local`:
 
-`GITHUB_TOKEN`は任意です。共通のサーバーtokenで集計したい場合だけ設定します。通常、private repositoriesはOAuthログインしたユーザーのtokenで集計します。
+```env
+GITHUB_USERNAME=YOUR_GITHUB_USERNAME
+GITHUB_TOKEN=
+AUTH_SECRET=YOUR_RANDOM_SECRET
+AUTH_GITHUB_ID=YOUR_GITHUB_OAUTH_CLIENT_ID
+AUTH_GITHUB_SECRET=YOUR_GITHUB_OAUTH_CLIENT_SECRET
+NEXTAUTH_URL=http://localhost:3000
+DATABASE_URL=
+```
 
-`AUTH_SECRET`はOAuth sessionとprivate card URLの暗号化に使います。以下のような値を設定してください。
+Generate `AUTH_SECRET`:
 
 ```bash
 openssl rand -base64 32
 ```
 
-`AUTH_GITHUB_ID`と`AUTH_GITHUB_SECRET`はGitHub OAuth Appで発行します。OAuth AppのCallback URLは以下です。
+Run locally:
 
-```text
-https://your-domain.example/api/auth/callback/github
+```bash
+npm run dev
 ```
 
-ローカル開発では以下を使います。
+Open http://localhost:3000.
+
+## GitHub OAuth Setup
+
+Create a GitHub OAuth App:
 
 ```text
+GitHub Settings -> Developer settings -> OAuth Apps -> New OAuth App
+```
+
+For local development:
+
+```text
+Application name:
+GitHub Stats
+
+Homepage URL:
+http://localhost:3000
+
+Authorization callback URL:
 http://localhost:3000/api/auth/callback/github
 ```
 
+For production:
+
+```text
+Homepage URL:
+https://your-app.vercel.app
+
+Authorization callback URL:
+https://your-app.vercel.app/api/auth/callback/github
+```
+
+Copy the OAuth App values into `.env.local` or your hosting provider:
+
+```env
+AUTH_GITHUB_ID=Client ID
+AUTH_GITHUB_SECRET=Client Secret
+```
+
+## Profile README Usage
+
+Public repositories:
+
+```md
+[![GitHub Language Stats](https://your-app.vercel.app/api/languages.svg?username=YOUR_GITHUB_USERNAME)](https://your-app.vercel.app)
+```
+
+Private repositories:
+
+1. Open your deployed app.
+2. Sign in with GitHub.
+3. Enable `Include private repositories`.
+4. Copy the generated Markdown.
+5. Paste it into your GitHub profile README.
+
+The private card URL includes an encrypted `card_token`:
+
+```md
+[![GitHub Language Stats](https://your-app.vercel.app/api/languages.svg?username=YOUR_GITHUB_USERNAME&include_private=true&card_token=...)](https://your-app.vercel.app)
+```
+
+You do not need to log in every time the card is displayed. Login is only needed when generating the private card URL.
+
 ## API
 
-### SVG card
+SVG card:
 
 ```text
 GET /api/languages.svg?username=YOUR_GITHUB_USERNAME
 GET /api/languages.svg?username=YOUR_GITHUB_USERNAME&include_private=true&card_token=...
 ```
 
-### JSON
+JSON:
 
 ```text
 GET /api/languages?username=YOUR_GITHUB_USERNAME
 GET /api/languages?username=YOUR_GITHUB_USERNAME&include_private=true&card_token=...
 ```
 
-`include_private`は`1`、`true`、`yes`、`on`で有効になります。
+`include_private` accepts `1`, `true`, `yes`, or `on`.
 
-## Development
+## Environment Variables
 
-```bash
-npm install
-npm run dev
-```
+| Name | Required | Description |
+| --- | --- | --- |
+| `GITHUB_USERNAME` | Optional | Default GitHub username when `username` is not passed in the URL. |
+| `GITHUB_TOKEN` | Optional | Server-level GitHub token. Usually leave this empty when using OAuth. |
+| `AUTH_SECRET` | Yes for OAuth/private cards | Secret used by NextAuth and encrypted private card tokens. |
+| `AUTH_GITHUB_ID` | Yes for OAuth | GitHub OAuth App client ID. |
+| `AUTH_GITHUB_SECRET` | Yes for OAuth | GitHub OAuth App client secret. |
+| `NEXTAUTH_URL` | Yes in production | Canonical app URL, such as `https://your-app.vercel.app`. |
+| `DATABASE_URL` | Not currently used | Reserved for future database-backed sessions or token storage. |
 
-Open http://localhost:3000.
+## Security Notes
+
+Private repository cards expose aggregated language percentages, not repository names or source code.
+
+Anyone who can see a private `card_token` URL can request the same aggregated card. Treat that URL as shareable-but-sensitive. If you need to invalidate old private card URLs, revoke the GitHub OAuth authorization or rotate `AUTH_SECRET`.
 
 ## Deploy
 
-VercelなどのNext.js対応ホスティングにデプロイできます。private repositoriesを含めるカードを公開する場合、SVG URLを知っている人は集計結果を見られるため、公開してよい範囲か確認してから`include_private=true`を使ってください。GitHub profile READMEに貼る以上、private repoの中身そのものは出ませんが、言語使用率の集計結果は公開されます。
+Deploy to Vercel or any Next.js-compatible host.
+
+After deployment:
+
+1. Set the environment variables in your hosting provider.
+2. Update your GitHub OAuth App callback URL.
+3. Open the app and copy your README Markdown.
+
+## Star This Project
+
+If this helps make your GitHub profile a little more honest about what you build, a star would mean a lot.

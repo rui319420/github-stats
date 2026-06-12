@@ -64,6 +64,8 @@ interface LanguagePieChartProps {
   privateCardToken?: string;
 }
 
+type EmbedFormat = "markdown" | "html";
+
 const INTERVAL_MS = 2000;
 const INITIAL_DELAY_MS = 1000;
 const RESUME_DELAY_MS = 100;
@@ -84,6 +86,7 @@ export default function LanguagePieChart({
   const [includePrivate, setIncludePrivate] = useState(false);
   const [repositoryCount, setRepositoryCount] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [embedFormat, setEmbedFormat] = useState<EmbedFormat>("markdown");
   const [activeIndex, setActiveIndex] = useState(0);
 
   const dataLengthRef = useRef(0);
@@ -137,11 +140,14 @@ export default function LanguagePieChart({
     return `${origin}/api/languages.svg?${params.toString()}`;
   }, [origin, privateCardToken]);
 
-  const markdown = useMemo(() => {
+  const embedCode = useMemo(() => {
     const imageUrl = buildImageUrl(activeUsername || usernameInput, includePrivate);
     if (!imageUrl || !origin) return "";
+    if (embedFormat === "html") {
+      return `<img src="${imageUrl}" alt="GitHub Language Stats" />`;
+    }
     return `[![GitHub Language Stats](${imageUrl})](${origin})`;
-  }, [activeUsername, buildImageUrl, includePrivate, origin, usernameInput]);
+  }, [activeUsername, buildImageUrl, embedFormat, includePrivate, origin, usernameInput]);
 
   const fetchData = useCallback(async (username: string, privateScope: boolean) => {
     setLoading(true);
@@ -216,9 +222,9 @@ export default function LanguagePieChart({
     fetchData(trimmed, includePrivate);
   };
 
-  const copyMarkdown = async () => {
-    if (!markdown) return;
-    await navigator.clipboard.writeText(markdown);
+  const copyEmbedCode = async () => {
+    if (!embedCode) return;
+    await navigator.clipboard.writeText(embedCode);
     setCopied(true);
   };
 
@@ -309,19 +315,49 @@ export default function LanguagePieChart({
         </div>
       )}
       <div className="mt-4 border-t border-[#30363d] pt-4">
+        <div className="mb-3 inline-flex rounded-md border border-[#30363d] bg-[#161b22] p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setEmbedFormat("markdown");
+              setCopied(false);
+            }}
+            className={`h-8 rounded px-3 text-sm font-semibold transition ${
+              embedFormat === "markdown"
+                ? "bg-[#238636] text-white"
+                : "text-[#8b949e] hover:text-[#f0f6fc]"
+            }`}
+          >
+            Markdown
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEmbedFormat("html");
+              setCopied(false);
+            }}
+            className={`h-8 rounded px-3 text-sm font-semibold transition ${
+              embedFormat === "html"
+                ? "bg-[#238636] text-white"
+                : "text-[#8b949e] hover:text-[#f0f6fc]"
+            }`}
+          >
+            HTML img
+          </button>
+        </div>
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
           <input
             readOnly
-            value={markdown}
+            value={embedCode}
             className="h-10 flex-1 rounded-md border border-[#30363d] bg-[#161b22] px-3 font-mono text-xs text-[#c9d1d9] outline-none"
           />
           <button
             type="button"
-            onClick={copyMarkdown}
-            disabled={!markdown}
+            onClick={copyEmbedCode}
+            disabled={!embedCode}
             className="h-10 rounded-md border border-[#3d444d] px-4 text-sm font-semibold text-[#f0f6fc] transition hover:border-[#8b949e] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {copied ? "Copied" : "Copy Markdown"}
+            {copied ? "Copied" : "Copy"}
           </button>
         </div>
       </div>
