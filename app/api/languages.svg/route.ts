@@ -1,4 +1,6 @@
 import { type NextRequest } from "next/server";
+import { auth } from "../../../auth";
+import { readCardToken } from "../../lib/cardToken";
 import { GITHUB_LANGUAGE_COLORS, getRandomColor } from "../../lib/constants";
 import {
   getLanguageStats,
@@ -95,19 +97,28 @@ function svgResponse(svg: string, status = 200) {
 }
 
 export async function GET(request: NextRequest) {
-  const username = resolveUsername(request.nextUrl.searchParams.get("username"));
-  if (!username) {
-    return svgResponse(
-      renderErrorSvg("A valid GitHub username is required."),
-      400
-    );
-  }
-
   try {
+    const session = await auth();
+    const cardToken = request.nextUrl.searchParams.get("card_token");
+    const privatePayload = cardToken ? readCardToken(cardToken) : null;
+    const username =
+      privatePayload?.username ??
+      resolveUsername(
+        request.nextUrl.searchParams.get("username") ??
+          session?.user?.login
+      );
+    if (!username) {
+      return svgResponse(
+        renderErrorSvg("A valid GitHub username is required."),
+        400
+      );
+    }
+
     const includePrivate = parseBooleanParam(
       request.nextUrl.searchParams.get("include_private")
     );
-    const stats = await getLanguageStats(username, includePrivate);
+    const token = privatePayload?.accessToken ?? session?.accessToken;
+    const stats = await getLanguageStats(username, includePrivate, token);
     return svgResponse(renderStatsSvg(stats));
   } catch (error) {
     const message =

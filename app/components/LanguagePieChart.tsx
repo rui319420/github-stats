@@ -57,16 +57,29 @@ interface LanguagesApiResponse {
   error?: string;
 }
 
+interface LanguagePieChartProps {
+  initialUsername?: string;
+  isSignedIn?: boolean;
+  privateCardError?: string;
+  privateCardToken?: string;
+}
+
 const INTERVAL_MS = 2000;
 const INITIAL_DELAY_MS = 1000;
 const RESUME_DELAY_MS = 100;
 
-export default function LanguagePieChart() {
+export default function LanguagePieChart({
+  initialUsername = "",
+  isSignedIn = false,
+  privateCardError,
+  privateCardToken,
+}: LanguagePieChartProps) {
   const [mounted, setMounted] = useState(false);
+  const [origin, setOrigin] = useState("");
   const [data, setData] = useState<LangData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [usernameInput, setUsernameInput] = useState("");
+  const [usernameInput, setUsernameInput] = useState(initialUsername);
   const [activeUsername, setActiveUsername] = useState("");
   const [includePrivate, setIncludePrivate] = useState(false);
   const [repositoryCount, setRepositoryCount] = useState(0);
@@ -110,21 +123,25 @@ export default function LanguagePieChart() {
 
   useEffect(() => {
     setMounted(true);
+    setOrigin(window.location.origin);
   }, []);
 
   const buildImageUrl = useCallback((username: string, privateScope: boolean) => {
-    if (typeof window === "undefined") return "";
+    if (!origin) return "";
     const params = new URLSearchParams();
     if (username.trim()) params.set("username", username.trim());
-    if (privateScope) params.set("include_private", "true");
-    return `${window.location.origin}/api/languages.svg?${params.toString()}`;
-  }, []);
+    if (privateScope) {
+      params.set("include_private", "true");
+      if (privateCardToken) params.set("card_token", privateCardToken);
+    }
+    return `${origin}/api/languages.svg?${params.toString()}`;
+  }, [origin, privateCardToken]);
 
   const markdown = useMemo(() => {
     const imageUrl = buildImageUrl(activeUsername || usernameInput, includePrivate);
-    if (!imageUrl) return "";
-    return `[![GitHub Language Stats](${imageUrl})](${window.location.origin})`;
-  }, [activeUsername, buildImageUrl, includePrivate, usernameInput]);
+    if (!imageUrl || !origin) return "";
+    return `[![GitHub Language Stats](${imageUrl})](${origin})`;
+  }, [activeUsername, buildImageUrl, includePrivate, origin, usernameInput]);
 
   const fetchData = useCallback(async (username: string, privateScope: boolean) => {
     setLoading(true);
@@ -134,7 +151,10 @@ export default function LanguagePieChart() {
       const params = new URLSearchParams();
       const trimmed = username.trim();
       if (trimmed) params.set("username", trimmed);
-      if (privateScope) params.set("include_private", "true");
+      if (privateScope) {
+        params.set("include_private", "true");
+        if (privateCardToken) params.set("card_token", privateCardToken);
+      }
       params.set("t", String(Date.now()));
       const res = await fetch(`/api/languages?${params.toString()}`);
       const payload = (await res.json()) as LanguagesApiResponse;
@@ -165,17 +185,18 @@ export default function LanguagePieChart() {
     } finally {
       setLoading(false);
     }
-  }, [startLoop, stopLoop]);
+  }, [privateCardToken, startLoop, stopLoop]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const initialUsername = params.get("username")?.trim() ?? "";
+    const initialUsernameFromUrl = params.get("username")?.trim() ?? "";
     const initialPrivate = params.get("include_private") === "true";
-    setUsernameInput(initialUsername);
+    const resolvedUsername = initialUsernameFromUrl || initialUsername;
+    setUsernameInput(resolvedUsername);
     setIncludePrivate(initialPrivate);
-    fetchData(initialUsername, initialPrivate);
+    fetchData(resolvedUsername, initialPrivate);
     return () => stopLoop();
-  }, [fetchData, stopLoop]);
+  }, [fetchData, initialUsername, stopLoop]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -232,6 +253,14 @@ export default function LanguagePieChart() {
             Include private repositories
           </label>
         </form>
+        {includePrivate && !isSignedIn && !privateCardToken ? (
+          <p className="mt-2 text-xs text-[#f0b72f]">
+            Sign in with GitHub to generate a private repository card URL.
+          </p>
+        ) : null}
+        {includePrivate && privateCardError ? (
+          <p className="mt-2 text-xs text-[#f85149]">{privateCardError}</p>
+        ) : null}
       </div>
 
       {!mounted || loading ? (

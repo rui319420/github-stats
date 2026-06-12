@@ -33,12 +33,18 @@ export function resolveUsername(raw: string | null | undefined): string | null {
   return username;
 }
 
-function createOctokit() {
-  return new Octokit({ auth: process.env.GITHUB_TOKEN || undefined });
+function createOctokit(token?: string) {
+  return new Octokit({
+    auth: token || process.env.GITHUB_TOKEN || undefined,
+  });
 }
 
-async function listRepositories(username: string, includePrivate: boolean) {
-  const octokit = createOctokit();
+async function listRepositories(
+  username: string,
+  includePrivate: boolean,
+  token?: string
+) {
+  const octokit = createOctokit(token);
 
   if (!includePrivate) {
     return octokit.paginate(octokit.repos.listForUser, {
@@ -49,8 +55,10 @@ async function listRepositories(username: string, includePrivate: boolean) {
     });
   }
 
-  if (!process.env.GITHUB_TOKEN) {
-    throw new Error("GITHUB_TOKEN is required when include_private is true.");
+  if (!token && !process.env.GITHUB_TOKEN) {
+    throw new Error(
+      "Sign in with GitHub or set GITHUB_TOKEN when include_private is true."
+    );
   }
 
   const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
@@ -82,10 +90,11 @@ async function mapLimit<T>(
 
 export async function getLanguageStats(
   username: string,
-  includePrivate: boolean
+  includePrivate: boolean,
+  token?: string
 ): Promise<LanguageStats> {
-  const octokit = createOctokit();
-  const repos = await listRepositories(username, includePrivate);
+  const octokit = createOctokit(token);
+  const repos = await listRepositories(username, includePrivate, token);
   const targets = repos.filter((repo) => !repo.fork && !repo.archived);
   const langMap: Record<string, number> = {};
 
