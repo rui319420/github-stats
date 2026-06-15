@@ -2,8 +2,11 @@ import { type NextRequest } from "next/server";
 import { auth } from "../../../auth";
 import { readCardToken } from "../../lib/cardToken";
 import {
+  customizeLanguageStats,
   getLanguageStats,
   parseBooleanParam,
+  parseHiddenLanguages,
+  parseLanguageCount,
   resolveUsername,
 } from "../../lib/githubLanguages";
 
@@ -33,7 +36,11 @@ export async function GET(request: NextRequest) {
     );
     const token = privatePayload?.accessToken ?? session?.accessToken;
     const stats = await getLanguageStats(username, includePrivate, token);
-    return Response.json(stats);
+    const customizedStats = customizeLanguageStats(stats, {
+      count: parseLanguageCount(request.nextUrl.searchParams.get("count")),
+      hideLanguages: parseHiddenLanguages(request.nextUrl.searchParams.get("hide")),
+    });
+    return Response.json(customizedStats);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch GitHub language data.";

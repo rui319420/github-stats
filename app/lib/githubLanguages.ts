@@ -13,6 +13,13 @@ export interface LanguageStats {
   languages: LanguageData[];
 }
 
+export type LanguageCount = 5 | 8 | 10 | "all";
+
+export interface LanguageStatsDisplayOptions {
+  count?: LanguageCount;
+  hideLanguages?: string[];
+}
+
 const EXCLUDED_LANGUAGES = new Set([
   "ShaderLab",
   "HLSL",
@@ -25,6 +32,20 @@ const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 
 export function parseBooleanParam(value: string | null): boolean {
   return value ? TRUE_VALUES.has(value.toLowerCase()) : false;
+}
+
+export function parseLanguageCount(value: string | null): LanguageCount {
+  if (value === "5" || value === "8" || value === "10") return Number(value) as 5 | 8 | 10;
+  if (value?.toLowerCase() === "all") return "all";
+  return 8;
+}
+
+export function parseHiddenLanguages(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 export function resolveUsername(raw: string | null | undefined): string | null {
@@ -127,5 +148,30 @@ export async function getLanguageStats(
     includePrivate,
     repositoryCount: targets.length,
     languages,
+  };
+}
+
+export function customizeLanguageStats(
+  stats: LanguageStats,
+  options: LanguageStatsDisplayOptions
+): LanguageStats {
+  const hidden = new Set(
+    (options.hideLanguages ?? []).map((language) => language.toLowerCase())
+  );
+  const visibleLanguages = stats.languages.filter(
+    (language) => !hidden.has(language.name.toLowerCase())
+  );
+  const total = visibleLanguages.reduce((sum, language) => sum + language.bytes, 0);
+  const languages = visibleLanguages
+    .map((language) => ({
+      ...language,
+      percentage: total === 0 ? 0 : language.bytes / total,
+    }))
+    .sort((a, b) => b.bytes - a.bytes);
+
+  return {
+    ...stats,
+    languages:
+      options.count === "all" ? languages : languages.slice(0, options.count ?? 8),
   };
 }

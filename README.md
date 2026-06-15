@@ -24,6 +24,8 @@ Users can choose:
 - Public repository language stats for any GitHub username
 - GitHub OAuth login for private repository language stats
 - Copy-ready Markdown generator in the web UI
+- Custom themes, hidden languages, borders, and language count
+- Optional animated language labels inside the SVG card
 - Encrypted `card_token` support for private README cards
 - JSON API for custom clients
 - Built with Next.js App Router, React, Recharts, and Octokit
@@ -110,6 +112,12 @@ Public repositories:
 [![GitHub Language Stats](https://your-app.vercel.app/api/languages.svg?username=YOUR_GITHUB_USERNAME)](https://your-app.vercel.app)
 ```
 
+Customized card:
+
+```md
+[![GitHub Language Stats](https://your-app.vercel.app/api/languages.svg?username=YOUR_GITHUB_USERNAME&count=10&hide=HTML,CSS&theme=github-dark)](https://your-app.vercel.app)
+```
+
 Private repositories:
 
 1. Open your deployed app.
@@ -143,6 +151,30 @@ GET /api/languages?username=YOUR_GITHUB_USERNAME&include_private=true&card_token
 ```
 
 `include_private` accepts `1`, `true`, `yes`, or `on`.
+
+## Customization
+
+All options can be set in the web UI or directly in the card URL.
+
+| Parameter | Values | Description |
+| --- | --- | --- |
+| `count` | `5`, `8`, `10`, `all` | Number of languages to show. |
+| `hide` | Comma-separated language names | Hide languages such as `HTML,CSS,Jupyter Notebook`. |
+| `theme` | `github-dark`, `github-light`, `dark`, `light`, `transparent` | Card color theme. |
+| `transparent` | `true`, `false` | Force a transparent background. |
+| `github_colors` | `true`, `false` | Use GitHub language colors. Enabled by default. |
+| `border` | `true`, `false` | Show or hide the card border. |
+| `animated` | `true`, `false` | Cycle the active language label, highlight, percentage, and KB text. |
+| `interval` | `1`, `2`, `3`, `5` | Seconds each language stays visible when `animated=true`. |
+
+Examples:
+
+```text
+/api/languages.svg?username=YOUR_GITHUB_USERNAME&count=5
+/api/languages.svg?username=YOUR_GITHUB_USERNAME&hide=HTML,CSS&theme=github-light
+/api/languages.svg?username=YOUR_GITHUB_USERNAME&transparent=true&border=false
+/api/languages.svg?username=YOUR_GITHUB_USERNAME&animated=true&interval=2
+```
 
 ## Environment Variables
 

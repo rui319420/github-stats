@@ -65,6 +65,9 @@ interface LanguagePieChartProps {
 }
 
 type EmbedFormat = "markdown" | "html";
+type LanguageCountOption = "5" | "8" | "10" | "all";
+type ThemeOption = "dark" | "light" | "transparent" | "github-dark" | "github-light";
+type AnimationIntervalOption = "1" | "2" | "3" | "5";
 
 const INTERVAL_MS = 2000;
 const INITIAL_DELAY_MS = 1000;
@@ -87,6 +90,16 @@ export default function LanguagePieChart({
   const [repositoryCount, setRepositoryCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [embedFormat, setEmbedFormat] = useState<EmbedFormat>("markdown");
+  const [languageCount, setLanguageCount] = useState<LanguageCountOption>("8");
+  const [hiddenLanguages, setHiddenLanguages] = useState("");
+  const [theme, setTheme] = useState<ThemeOption>("github-dark");
+  const [transparentBackground, setTransparentBackground] = useState(false);
+  const [showBorder, setShowBorder] = useState(true);
+  const [githubColors, setGithubColors] = useState(true);
+  const [animatedLabels, setAnimatedLabels] = useState(false);
+  const [animationInterval, setAnimationInterval] =
+    useState<AnimationIntervalOption>("2");
+  const [previewVersion, setPreviewVersion] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const dataLengthRef = useRef(0);
@@ -137,19 +150,64 @@ export default function LanguagePieChart({
       params.set("include_private", "true");
       if (privateCardToken) params.set("card_token", privateCardToken);
     }
+    params.set("count", languageCount);
+    if (hiddenLanguages.trim()) params.set("hide", hiddenLanguages.trim());
+    params.set("theme", theme);
+    if (animatedLabels) {
+      params.set("animated", "true");
+      params.set("interval", animationInterval);
+    }
+    if (transparentBackground) params.set("transparent", "true");
+    if (!showBorder) params.set("border", "false");
+    if (!githubColors) params.set("github_colors", "false");
     return `${origin}/api/languages.svg?${params.toString()}`;
-  }, [origin, privateCardToken]);
+  }, [
+    animatedLabels,
+    animationInterval,
+    githubColors,
+    hiddenLanguages,
+    languageCount,
+    origin,
+    privateCardToken,
+    showBorder,
+    theme,
+    transparentBackground,
+  ]);
+
+  const imageUrl = useMemo(
+    () => buildImageUrl(activeUsername || usernameInput, includePrivate),
+    [activeUsername, buildImageUrl, includePrivate, usernameInput]
+  );
+
+  useEffect(() => {
+    if (imageUrl) setPreviewVersion(Date.now());
+  }, [imageUrl]);
+
+  const previewImageUrl = useMemo(() => {
+    if (!imageUrl || previewVersion === 0) return imageUrl;
+    const separator = imageUrl.includes("?") ? "&" : "?";
+    return `${imageUrl}${separator}_preview=${previewVersion}`;
+  }, [imageUrl, previewVersion]);
 
   const embedCode = useMemo(() => {
-    const imageUrl = buildImageUrl(activeUsername || usernameInput, includePrivate);
     if (!imageUrl || !origin) return "";
     if (embedFormat === "html") {
       return `<img src="${imageUrl}" alt="GitHub Language Stats" />`;
     }
     return `[![GitHub Language Stats](${imageUrl})](${origin})`;
-  }, [activeUsername, buildImageUrl, embedFormat, includePrivate, origin, usernameInput]);
+  }, [embedFormat, imageUrl, origin]);
 
-  const fetchData = useCallback(async (username: string, privateScope: boolean) => {
+  const loadLanguageData = useCallback(async ({
+    username,
+    privateScope,
+    count,
+    hide,
+  }: {
+    username: string;
+    privateScope: boolean;
+    count: LanguageCountOption;
+    hide: string;
+  }) => {
     setLoading(true);
     setError(null);
     setCopied(false);
@@ -161,6 +219,8 @@ export default function LanguagePieChart({
         params.set("include_private", "true");
         if (privateCardToken) params.set("card_token", privateCardToken);
       }
+      params.set("count", count);
+      if (hide.trim()) params.set("hide", hide.trim());
       params.set("t", String(Date.now()));
       const res = await fetch(`/api/languages?${params.toString()}`);
       const payload = (await res.json()) as LanguagesApiResponse;
@@ -193,16 +253,64 @@ export default function LanguagePieChart({
     }
   }, [privateCardToken, startLoop, stopLoop]);
 
+  const fetchData = useCallback((username: string, privateScope: boolean) => {
+    return loadLanguageData({
+      username,
+      privateScope,
+      count: languageCount,
+      hide: hiddenLanguages,
+    });
+  }, [hiddenLanguages, languageCount, loadLanguageData]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const initialUsernameFromUrl = params.get("username")?.trim() ?? "";
     const initialPrivate = params.get("include_private") === "true";
+    const initialCount = params.get("count");
+    const initialTheme = params.get("theme");
+    const initialInterval = params.get("interval");
     const resolvedUsername = initialUsernameFromUrl || initialUsername;
+    const resolvedCount =
+      initialCount === "5" ||
+      initialCount === "8" ||
+      initialCount === "10" ||
+      initialCount === "all"
+        ? initialCount
+        : "8";
+    const resolvedHiddenLanguages = params.get("hide") ?? "";
     setUsernameInput(resolvedUsername);
     setIncludePrivate(initialPrivate);
-    fetchData(resolvedUsername, initialPrivate);
+    setLanguageCount(resolvedCount);
+    setHiddenLanguages(resolvedHiddenLanguages);
+    if (
+      initialTheme === "dark" ||
+      initialTheme === "light" ||
+      initialTheme === "transparent" ||
+      initialTheme === "github-dark" ||
+      initialTheme === "github-light"
+    ) {
+      setTheme(initialTheme);
+    }
+    setAnimatedLabels(params.get("animated") === "true");
+    if (
+      initialInterval === "1" ||
+      initialInterval === "2" ||
+      initialInterval === "3" ||
+      initialInterval === "5"
+    ) {
+      setAnimationInterval(initialInterval);
+    }
+    setTransparentBackground(params.get("transparent") === "true");
+    setShowBorder(params.get("border") !== "false");
+    setGithubColors(params.get("github_colors") !== "false");
+    loadLanguageData({
+      username: resolvedUsername,
+      privateScope: initialPrivate,
+      count: resolvedCount,
+      hide: resolvedHiddenLanguages,
+    });
     return () => stopLoop();
-  }, [fetchData, initialUsername, stopLoop]);
+  }, [initialUsername, loadLanguageData, stopLoop]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -217,6 +325,36 @@ export default function LanguagePieChart({
       url.searchParams.set("include_private", "true");
     } else {
       url.searchParams.delete("include_private");
+    }
+    url.searchParams.set("count", languageCount);
+    if (hiddenLanguages.trim()) {
+      url.searchParams.set("hide", hiddenLanguages.trim());
+    } else {
+      url.searchParams.delete("hide");
+    }
+    url.searchParams.set("theme", theme);
+    url.searchParams.delete("layout");
+    if (animatedLabels) {
+      url.searchParams.set("animated", "true");
+      url.searchParams.set("interval", animationInterval);
+    } else {
+      url.searchParams.delete("animated");
+      url.searchParams.delete("interval");
+    }
+    if (transparentBackground) {
+      url.searchParams.set("transparent", "true");
+    } else {
+      url.searchParams.delete("transparent");
+    }
+    if (showBorder) {
+      url.searchParams.delete("border");
+    } else {
+      url.searchParams.set("border", "false");
+    }
+    if (githubColors) {
+      url.searchParams.delete("github_colors");
+    } else {
+      url.searchParams.set("github_colors", "false");
     }
     window.history.replaceState({}, "", url);
     fetchData(trimmed, includePrivate);
@@ -235,12 +373,12 @@ export default function LanguagePieChart({
         <p className="mt-1 text-xs text-[#949BA4]">
           {activeUsername ? `@${activeUsername} · ${repositoryCount} repositories` : "Loading..."}
         </p>
-        <form className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={handleSubmit}>
+        <form className="mt-4 grid gap-3 md:grid-cols-3" onSubmit={handleSubmit}>
           <input
             value={usernameInput}
             onChange={(event) => setUsernameInput(event.target.value)}
             placeholder="GitHub username"
-            className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm text-[#F2F3F5] outline-none transition focus:border-[#2ea043]"
+            className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm text-[#F2F3F5] outline-none transition focus:border-[#2ea043] md:col-span-2"
           />
           <button
             type="submit"
@@ -249,7 +387,7 @@ export default function LanguagePieChart({
           >
             Load
           </button>
-          <label className="flex items-center gap-2 text-sm text-[#c9d1d9] md:col-span-2">
+          <label className="flex items-center gap-2 text-sm text-[#c9d1d9] md:col-span-3">
             <input
               type="checkbox"
               checked={includePrivate}
@@ -258,6 +396,131 @@ export default function LanguagePieChart({
             />
             Include private repositories
           </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[#8b949e]">
+            Languages
+            <select
+              value={languageCount}
+              onChange={(event) => {
+                const nextCount = event.target.value as LanguageCountOption;
+                const nextUsername = usernameInput.trim() || activeUsername;
+                const url = new URL(window.location.href);
+                url.searchParams.set("count", nextCount);
+                window.history.replaceState({}, "", url);
+                setLanguageCount(nextCount);
+                setCopied(false);
+                loadLanguageData({
+                  username: nextUsername,
+                  privateScope: includePrivate,
+                  count: nextCount,
+                  hide: hiddenLanguages,
+                });
+              }}
+              className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm font-normal normal-case text-[#F2F3F5] outline-none transition focus:border-[#2ea043]"
+            >
+              <option value="5">Top 5</option>
+              <option value="8">Top 8</option>
+              <option value="10">Top 10</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[#8b949e]">
+            Theme
+            <select
+              value={theme}
+              onChange={(event) => {
+                setTheme(event.target.value as ThemeOption);
+                setCopied(false);
+              }}
+              className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm font-normal normal-case text-[#F2F3F5] outline-none transition focus:border-[#2ea043]"
+            >
+              <option value="github-dark">GitHub dark</option>
+              <option value="github-light">GitHub light</option>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="transparent">Transparent</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[#8b949e] md:col-span-3">
+            Hide languages
+            <input
+              value={hiddenLanguages}
+              onChange={(event) => {
+                setHiddenLanguages(event.target.value);
+                setCopied(false);
+              }}
+              placeholder="HTML, CSS, Jupyter Notebook"
+              className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm font-normal normal-case text-[#F2F3F5] outline-none transition focus:border-[#2ea043]"
+            />
+          </label>
+          <div className="grid gap-2 text-sm text-[#c9d1d9] md:col-span-3 md:grid-cols-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={transparentBackground}
+                onChange={(event) => {
+                  setTransparentBackground(event.target.checked);
+                  setCopied(false);
+                }}
+                className="h-4 w-4 accent-[#2ea043]"
+              />
+              Transparent background
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={githubColors}
+                onChange={(event) => {
+                  setGithubColors(event.target.checked);
+                  setCopied(false);
+                }}
+                className="h-4 w-4 accent-[#2ea043]"
+              />
+              GitHub language colors
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showBorder}
+                onChange={(event) => {
+                  setShowBorder(event.target.checked);
+                  setCopied(false);
+                }}
+                className="h-4 w-4 accent-[#2ea043]"
+              />
+              Border
+            </label>
+          </div>
+          <div className="grid gap-3 md:col-span-3 md:grid-cols-[1fr_160px]">
+            <label className="flex items-center gap-2 text-sm text-[#c9d1d9]">
+              <input
+                type="checkbox"
+                checked={animatedLabels}
+                onChange={(event) => {
+                  setAnimatedLabels(event.target.checked);
+                  setCopied(false);
+                }}
+                className="h-4 w-4 accent-[#2ea043]"
+              />
+              Animate language labels
+            </label>
+            <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[#8b949e]">
+              Interval
+              <select
+                value={animationInterval}
+                onChange={(event) => {
+                  setAnimationInterval(event.target.value as AnimationIntervalOption);
+                  setCopied(false);
+                }}
+                disabled={!animatedLabels}
+                className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm font-normal normal-case text-[#F2F3F5] outline-none transition focus:border-[#2ea043] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="1">1 sec</option>
+                <option value="2">2 sec</option>
+                <option value="3">3 sec</option>
+                <option value="5">5 sec</option>
+              </select>
+            </label>
+          </div>
         </form>
         {includePrivate && !isSignedIn && !privateCardToken ? (
           <p className="mt-2 text-xs text-[#f0b72f]">
@@ -314,6 +577,28 @@ export default function LanguagePieChart({
           </ResponsiveContainer>
         </div>
       )}
+      <div className="mt-4 border-t border-[#30363d] pt-4">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#8b949e]">
+          Preview
+        </h3>
+        <div className="overflow-x-auto rounded-md border border-[#30363d] bg-[#010409] p-3">
+          {imageUrl ? (
+            <object
+              key={previewImageUrl}
+              data={previewImageUrl}
+              type="image/svg+xml"
+              aria-label="GitHub Language Stats preview"
+              className="h-[420px] w-[420px] max-w-none"
+            >
+              GitHub Language Stats preview
+            </object>
+          ) : (
+            <div className="flex h-32 items-center justify-center text-sm text-[#636e7b]">
+              No preview
+            </div>
+          )}
+        </div>
+      </div>
       <div className="mt-4 border-t border-[#30363d] pt-4">
         <div className="mb-3 inline-flex rounded-md border border-[#30363d] bg-[#161b22] p-1">
           <button
