@@ -24,8 +24,8 @@ Users can choose:
 - Public repository language stats for any GitHub username
 - GitHub OAuth login for private repository language stats
 - Copy-ready Markdown generator in the web UI
-- Custom themes, hidden languages, borders, and language count
-- Optional animated language labels inside the SVG card
+- Custom themes, hidden languages, borders, language count, and boundary position
+- Animated language labels inside the SVG card
 - Encrypted `card_token` support for private README cards
 - JSON API for custom clients
 - Built with Next.js App Router, React, Recharts, and Octokit
@@ -161,17 +161,19 @@ All options can be set in the web UI or directly in the card URL.
 | `count` | `5`, `8`, `10`, `all` | Number of languages to show. |
 | `hide` | Comma-separated language names | Hide languages such as `HTML,CSS,Jupyter Notebook`. |
 | `theme` | `github-dark`, `github-light`, `dark`, `light`, `transparent` | Card color theme. |
+| `boundary` | `top`, `right`, `bottom`, `left` | Where the first language boundary appears on the donut. |
 | `transparent` | `true`, `false` | Force a transparent background. |
 | `github_colors` | `true`, `false` | Use GitHub language colors. Enabled by default. |
 | `border` | `true`, `false` | Show or hide the card border. |
-| `animated` | `true`, `false` | Cycle the active language label, highlight, percentage, and KB text. |
-| `interval` | `1`, `2`, `3`, `5` | Seconds each language stays visible when `animated=true`. |
+| `animated` | `true`, `false` | Cycle the active language label, highlight, percentage, and KB text. Enabled by default. |
+| `interval` | `1` to `10` | Seconds each language stays visible when `animated=true`. Defaults to `2`. |
 
 Examples:
 
 ```text
 /api/languages.svg?username=YOUR_GITHUB_USERNAME&count=5
 /api/languages.svg?username=YOUR_GITHUB_USERNAME&hide=HTML,CSS&theme=github-light
+/api/languages.svg?username=YOUR_GITHUB_USERNAME&boundary=right
 /api/languages.svg?username=YOUR_GITHUB_USERNAME&transparent=true&border=false
 /api/languages.svg?username=YOUR_GITHUB_USERNAME&animated=true&interval=2
 ```

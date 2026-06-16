@@ -1,27 +1,15 @@
 import { type NextRequest } from "next/server";
 import { auth } from "../../../auth";
-import { readCardToken } from "../../lib/cardToken";
-import {
-  customizeLanguageStats,
-  getLanguageStats,
-  parseBooleanParam,
-  parseHiddenLanguages,
-  parseLanguageCount,
-  resolveUsername,
-} from "../../lib/githubLanguages";
+import { getCustomizedLanguageStatsForRequest } from "../../lib/languageStatsRequest";
 
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
-    const cardToken = request.nextUrl.searchParams.get("card_token");
-    const privatePayload = cardToken ? readCardToken(cardToken) : null;
-    const username =
-      privatePayload?.username ??
-      resolveUsername(
-        request.nextUrl.searchParams.get("username") ??
-          session?.user?.login
-      );
-    if (!username) {
+    const customizedStats = await getCustomizedLanguageStatsForRequest(
+      request,
+      session
+    );
+    if (!customizedStats) {
       return Response.json(
         {
           error:
@@ -31,15 +19,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const includePrivate = parseBooleanParam(
-      request.nextUrl.searchParams.get("include_private")
-    );
-    const token = privatePayload?.accessToken ?? session?.accessToken;
-    const stats = await getLanguageStats(username, includePrivate, token);
-    const customizedStats = customizeLanguageStats(stats, {
-      count: parseLanguageCount(request.nextUrl.searchParams.get("count")),
-      hideLanguages: parseHiddenLanguages(request.nextUrl.searchParams.get("hide")),
-    });
     return Response.json(customizedStats);
   } catch (error) {
     const message =

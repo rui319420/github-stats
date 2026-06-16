@@ -1,4 +1,8 @@
 import { Octokit } from "@octokit/rest";
+import {
+  DEFAULT_LANGUAGE_COUNT,
+  isLanguageCountOption,
+} from "./chartOptions";
 
 export interface LanguageData {
   name: string;
@@ -35,9 +39,11 @@ export function parseBooleanParam(value: string | null): boolean {
 }
 
 export function parseLanguageCount(value: string | null): LanguageCount {
-  if (value === "5" || value === "8" || value === "10") return Number(value) as 5 | 8 | 10;
-  if (value?.toLowerCase() === "all") return "all";
-  return 8;
+  if (!isLanguageCountOption(value)) {
+    return Number(DEFAULT_LANGUAGE_COUNT) as 5 | 8 | 10;
+  }
+  if (value === "all") return "all";
+  return Number(value) as 5 | 8 | 10;
 }
 
 export function parseHiddenLanguages(value: string | null): string[] {
@@ -161,17 +167,19 @@ export function customizeLanguageStats(
   const visibleLanguages = stats.languages.filter(
     (language) => !hidden.has(language.name.toLowerCase())
   );
-  const total = visibleLanguages.reduce((sum, language) => sum + language.bytes, 0);
-  const languages = visibleLanguages
-    .map((language) => ({
-      ...language,
-      percentage: total === 0 ? 0 : language.bytes / total,
-    }))
-    .sort((a, b) => b.bytes - a.bytes);
+  const sortedLanguages = [...visibleLanguages].sort((a, b) => b.bytes - a.bytes);
+  const selectedLanguages =
+    options.count === "all"
+      ? sortedLanguages
+      : sortedLanguages.slice(0, options.count ?? 8);
+  const total = selectedLanguages.reduce((sum, language) => sum + language.bytes, 0);
+  const languages = selectedLanguages.map((language) => ({
+    ...language,
+    percentage: total === 0 ? 0 : language.bytes / total,
+  }));
 
   return {
     ...stats,
-    languages:
-      options.count === "all" ? languages : languages.slice(0, options.count ?? 8),
+    languages,
   };
 }

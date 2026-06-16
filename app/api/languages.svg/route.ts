@@ -1,81 +1,38 @@
 import { type NextRequest } from "next/server";
 import { auth } from "../../../auth";
-import { readCardToken } from "../../lib/cardToken";
 import { GITHUB_LANGUAGE_COLORS, getRandomColor } from "../../lib/constants";
 import {
-  customizeLanguageStats,
-  getLanguageStats,
+  CARD_THEMES,
+  CARD_TITLE,
+  DEFAULT_ANIMATION_INTERVAL_SECONDS,
+  FALLBACK_LANGUAGE_PALETTE,
+  SVG_BOUNDARY_ANGLES,
+  clamp,
+  formatBytes,
+  formatPercent,
+  parseBoundary,
+  parseTheme,
+  truncateLabel,
+  type BoundaryPosition,
+  type CardTheme,
+  type CardThemeName,
+} from "../../lib/chartOptions";
+import {
   parseBooleanParam,
-  parseHiddenLanguages,
-  parseLanguageCount,
-  resolveUsername,
   type LanguageData,
   type LanguageStats,
 } from "../../lib/githubLanguages";
-
-type CardThemeName = "dark" | "light" | "transparent" | "github-dark" | "github-light";
-
-interface CardTheme {
-  background: string;
-  border: string;
-  foreground: string;
-  muted: string;
-}
+import { getCustomizedLanguageStatsForRequest } from "../../lib/languageStatsRequest";
 
 interface CardOptions {
   animated: boolean;
   border: boolean;
+  boundary: BoundaryPosition;
   githubColors: boolean;
   interval: number;
   theme: CardThemeName;
   transparent: boolean;
 }
-
-const LANGUAGE_PALETTE = [
-  "#58a6ff",
-  "#3fb950",
-  "#f2cc60",
-  "#ff7b72",
-  "#bc8cff",
-  "#39c5cf",
-  "#ffa657",
-  "#d2a8ff",
-  "#7ee787",
-  "#a5d6ff",
-];
-
-const THEMES: Record<CardThemeName, CardTheme> = {
-  dark: {
-    background: "#111827",
-    border: "#374151",
-    foreground: "#f9fafb",
-    muted: "#9ca3af",
-  },
-  light: {
-    background: "#ffffff",
-    border: "#d0d7de",
-    foreground: "#24292f",
-    muted: "#57606a",
-  },
-  transparent: {
-    background: "transparent",
-    border: "#30363d",
-    foreground: "#f0f6fc",
-    muted: "#8b949e",
-  },
-  "github-dark": {
-    background: "#0d1117",
-    border: "#30363d",
-    foreground: "#f0f6fc",
-    muted: "#8b949e",
-  },
-  "github-light": {
-    background: "#ffffff",
-    border: "#d0d7de",
-    foreground: "#24292f",
-    muted: "#57606a",
-  },
-};
 
 function escapeXml(value: string): string {
   return value
@@ -86,32 +43,6 @@ function escapeXml(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
-function formatPercent(value: number): string {
-  return `${(value * 100).toFixed(value < 0.01 ? 2 : 1)}%`;
-}
-
-function formatBytes(bytes: number): string {
-  return `${(bytes / 1024).toFixed(0)} KB`;
-}
-
-function truncateLabel(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength - 3)}...`;
-}
-
-function parseTheme(value: string | null): CardThemeName {
-  if (
-    value === "dark" ||
-    value === "light" ||
-    value === "transparent" ||
-    value === "github-dark" ||
-    value === "github-light"
-  ) {
-    return value;
-  }
-  return "github-dark";
-}
-
 function parseOptionalBoolean(value: string | null, fallback: boolean): boolean {
   if (value === null) return fallback;
   if (["0", "false", "no", "off"].includes(value.toLowerCase())) return false;
@@ -120,15 +51,16 @@ function parseOptionalBoolean(value: string | null, fallback: boolean): boolean 
 
 function parseInterval(value: string | null): number {
   const interval = Number(value);
-  if (!Number.isFinite(interval)) return 2;
+  if (!Number.isFinite(interval)) return DEFAULT_ANIMATION_INTERVAL_SECONDS;
   return Math.min(10, Math.max(1, interval));
 }
 
 function parseCardOptions(request: NextRequest): CardOptions {
   const theme = parseTheme(request.nextUrl.searchParams.get("theme"));
   return {
-    animated: parseBooleanParam(request.nextUrl.searchParams.get("animated")),
+    animated: parseOptionalBoolean(request.nextUrl.searchParams.get("animated"), true),
     border: parseOptionalBoolean(request.nextUrl.searchParams.get("border"), true),
+    boundary: parseBoundary(request.nextUrl.searchParams.get("boundary")),
     githubColors: parseOptionalBoolean(
       request.nextUrl.searchParams.get("github_colors"),
       true
@@ -146,7 +78,9 @@ function getLanguageColor(
   index: number,
   githubColors: boolean
 ): string {
-  if (!githubColors) return LANGUAGE_PALETTE[index % LANGUAGE_PALETTE.length];
+  if (!githubColors) {
+    return FALLBACK_LANGUAGE_PALETTE[index % FALLBACK_LANGUAGE_PALETTE.length];
+  }
   return GITHUB_LANGUAGE_COLORS[language] ?? getRandomColor(language);
 }
 
@@ -169,6 +103,11 @@ function renderShell(
   ${border}`;
 }
 
+function renderCardHeading(width: number, theme: CardTheme) {
+  return `
+  <text x="${width / 2}" y="42" text-anchor="middle" fill="${theme.foreground}" font-family="Segoe UI, Ubuntu, sans-serif" font-size="20" font-weight="800">${CARD_TITLE}</text>`;
+}
+
 function polarToCartesian(cx: number, cy: number, radius: number, angle: number) {
   const radian = (Math.PI / 180) * angle;
   return {
@@ -185,19 +124,24 @@ function describeDonutSegment(
   startAngle: number,
   endAngle: number
 ) {
-  const fullCircle = endAngle - startAngle >= 359.99;
-  const adjustedEndAngle = fullCircle ? endAngle - 0.01 : endAngle;
+  const clockwise = endAngle >= startAngle;
+  const fullCircle = Math.abs(endAngle - startAngle) >= 359.99;
+  const adjustedEndAngle = fullCircle
+    ? endAngle + (clockwise ? -0.01 : 0.01)
+    : endAngle;
   const outerStart = polarToCartesian(cx, cy, outerRadius, startAngle);
   const outerEnd = polarToCartesian(cx, cy, outerRadius, adjustedEndAngle);
   const innerStart = polarToCartesian(cx, cy, innerRadius, adjustedEndAngle);
   const innerEnd = polarToCartesian(cx, cy, innerRadius, startAngle);
-  const largeArcFlag = adjustedEndAngle - startAngle > 180 ? 1 : 0;
+  const largeArcFlag = Math.abs(adjustedEndAngle - startAngle) > 180 ? 1 : 0;
+  const outerSweepFlag = clockwise ? 1 : 0;
+  const innerSweepFlag = clockwise ? 0 : 1;
 
   return [
     `M ${outerStart.x.toFixed(2)} ${outerStart.y.toFixed(2)}`,
-    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} ${outerSweepFlag} ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
     `L ${innerStart.x.toFixed(2)} ${innerStart.y.toFixed(2)}`,
-    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerEnd.x.toFixed(2)} ${innerEnd.y.toFixed(2)}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} ${innerSweepFlag} ${innerEnd.x.toFixed(2)} ${innerEnd.y.toFixed(2)}`,
     "Z",
   ].join(" ");
 }
@@ -365,9 +309,13 @@ function renderActiveLanguage(
   const sy = cy + (outerRadius + 10) * sin;
   const mx = cx + (outerRadius + 30) * cos;
   const my = cy + (outerRadius + 30) * sin;
-  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
+  const labelPadding = 24;
+  const labelOffset = 10;
+  const labelX = cos >= 0
+    ? clamp(mx + 34, cx + 22, 420 - labelPadding)
+    : clamp(mx - 34, labelPadding, cx - 22);
+  const ex = labelX - (cos >= 0 ? labelOffset : -labelOffset);
   const ey = my;
-  const labelX = ex + (cos >= 0 ? 1 : -1) * 12;
   const textAnchor = cos >= 0 ? "start" : "end";
 
   return `
@@ -390,10 +338,10 @@ function renderRechartsStylePie(
   const cy = 210;
   const innerRadius = 86;
   const outerRadius = 122;
-  let currentAngle = -90;
+  let currentAngle = SVG_BOUNDARY_ANGLES[options.boundary];
   const slices = languages.map((language, index) => {
     const startAngle = currentAngle;
-    const endAngle = currentAngle + language.percentage * 360;
+    const endAngle = currentAngle - language.percentage * 360;
     currentAngle = endAngle;
     return { endAngle, index, language, startAngle };
   });
@@ -430,7 +378,7 @@ function renderNoData(theme: CardTheme) {
 }
 
 function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
-  const theme = THEMES[options.theme];
+  const theme = CARD_THEMES[options.theme];
   const { width, height } = getDimensions();
   const content =
     stats.languages.length === 0
@@ -451,6 +399,7 @@ function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeXml(stats.username)} GitHub language stats">
   ${interactionStyles}
   ${renderShell(width, height, theme, options)}
+  ${renderCardHeading(width, theme)}
   ${content}
   ${interactionScript}
 </svg>`;
@@ -459,14 +408,15 @@ function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
 function renderErrorSvg(message: string) {
   const width = 760;
   const height = 180;
-  const theme = THEMES["github-dark"];
+  const theme = CARD_THEMES["github-dark"];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GitHub language stats error">
   ${renderShell(width, height, theme, {
     border: true,
+    boundary: "top",
     githubColors: true,
     animated: false,
-    interval: 2,
+    interval: DEFAULT_ANIMATION_INTERVAL_SECONDS,
     theme: "github-dark",
     transparent: false,
   })}
@@ -488,30 +438,16 @@ function svgResponse(svg: string, status = 200) {
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
-    const cardToken = request.nextUrl.searchParams.get("card_token");
-    const privatePayload = cardToken ? readCardToken(cardToken) : null;
-    const username =
-      privatePayload?.username ??
-      resolveUsername(
-        request.nextUrl.searchParams.get("username") ??
-          session?.user?.login
-      );
-    if (!username) {
+    const customizedStats = await getCustomizedLanguageStatsForRequest(
+      request,
+      session
+    );
+    if (!customizedStats) {
       return svgResponse(
         renderErrorSvg("A valid GitHub username is required."),
         400
       );
     }
-
-    const includePrivate = parseBooleanParam(
-      request.nextUrl.searchParams.get("include_private")
-    );
-    const token = privatePayload?.accessToken ?? session?.accessToken;
-    const stats = await getLanguageStats(username, includePrivate, token);
-    const customizedStats = customizeLanguageStats(stats, {
-      count: parseLanguageCount(request.nextUrl.searchParams.get("count")),
-      hideLanguages: parseHiddenLanguages(request.nextUrl.searchParams.get("hide")),
-    });
 
     return svgResponse(renderStatsSvg(customizedStats, parseCardOptions(request)));
   } catch (error) {

@@ -2,6 +2,24 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { PieChart, Pie, Cell, Sector, ResponsiveContainer, type PieSectorDataItem } from "recharts";
+import {
+  CARD_TITLE,
+  DEFAULT_ANIMATION_INTERVAL_SECONDS,
+  DEFAULT_BOUNDARY,
+  DEFAULT_LANGUAGE_COUNT,
+  DEFAULT_THEME,
+  RECHARTS_BOUNDARY_ANGLES,
+  clamp,
+  formatBytes,
+  formatPercent,
+  isBoundaryPosition,
+  isCardThemeName,
+  isLanguageCountOption,
+  type BoundaryPosition,
+  type CardThemeName,
+  type EmbedFormat,
+  type LanguageCountOption,
+} from "../lib/chartOptions";
 import { GITHUB_LANGUAGE_COLORS, getRandomColor } from "../lib/constants";
 
 const renderActiveShape = ({
@@ -15,11 +33,15 @@ const renderActiveShape = ({
   const sy = (cy ?? 0) + ((outerRadius ?? 0) + 10) * sin;
   const mx = (cx ?? 0) + ((outerRadius ?? 0) + 30) * cos;
   const my = (cy ?? 0) + ((outerRadius ?? 0) + 30) * sin;
-  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
+  const chartCenter = cx ?? 0;
+  const labelX = cos >= 0
+    ? clamp(mx + 34, chartCenter + 22, chartCenter * 2 - 24)
+    : clamp(mx - 34, 24, chartCenter - 22);
+  const ex = labelX - (cos >= 0 ? 10 : -10);
   const ey = my;
   const textAnchor = cos >= 0 ? "start" : "end";
   const bytesText = (payload as { bytes?: number }).bytes
-    ? `${((payload as { bytes: number }).bytes / 1024).toFixed(0)} KB`
+    ? formatBytes((payload as { bytes: number }).bytes)
     : "";
 
   return (
@@ -31,11 +53,11 @@ const renderActiveShape = ({
       <Sector cx={cx} cy={cy} startAngle={startAngle} endAngle={endAngle} innerRadius={(outerRadius ?? 0) + 6} outerRadius={(outerRadius ?? 0) + 10} fill={fill} />
       <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" strokeWidth={2} />
       <circle cx={ex} cy={ey} r={3} fill={fill} stroke="none" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#F2F3F5" fontWeight="bold">
-        {`${((percent ?? 0) * 100).toFixed(1)}%`}
+      <text x={labelX} y={ey} textAnchor={textAnchor} fill="#F2F3F5" fontWeight="bold">
+        {formatPercent(percent ?? 0)}
       </text>
       {bytesText && (
-        <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#949BA4" fontSize={12}>
+        <text x={labelX} y={ey} dy={18} textAnchor={textAnchor} fill="#949BA4" fontSize={12}>
           {bytesText}
         </text>
       )}
@@ -64,14 +86,75 @@ interface LanguagePieChartProps {
   privateCardToken?: string;
 }
 
-type EmbedFormat = "markdown" | "html";
-type LanguageCountOption = "5" | "8" | "10" | "all";
-type ThemeOption = "dark" | "light" | "transparent" | "github-dark" | "github-light";
-type AnimationIntervalOption = "1" | "2" | "3" | "5";
+interface CardSearchParamsOptions {
+  boundary: BoundaryPosition;
+  count: LanguageCountOption;
+  githubColors: boolean;
+  hiddenLanguages: string;
+  includeCardToken?: boolean;
+  includePrivate: boolean;
+  privateCardToken?: string;
+  showBorder: boolean;
+  theme: CardThemeName;
+  transparentBackground: boolean;
+  username: string;
+}
 
-const INTERVAL_MS = 2000;
+const INTERVAL_MS = DEFAULT_ANIMATION_INTERVAL_SECONDS * 1000;
 const INITIAL_DELAY_MS = 1000;
 const RESUME_DELAY_MS = 100;
+
+function applyCardSearchParams(
+  params: URLSearchParams,
+  options: CardSearchParamsOptions
+) {
+  const username = options.username.trim();
+  if (username) {
+    params.set("username", username);
+  } else {
+    params.delete("username");
+  }
+
+  if (options.includePrivate) {
+    params.set("include_private", "true");
+    if (options.includeCardToken && options.privateCardToken) {
+      params.set("card_token", options.privateCardToken);
+    } else {
+      params.delete("card_token");
+    }
+  } else {
+    params.delete("include_private");
+    params.delete("card_token");
+  }
+
+  params.set("count", options.count);
+  if (options.hiddenLanguages.trim()) {
+    params.set("hide", options.hiddenLanguages.trim());
+  } else {
+    params.delete("hide");
+  }
+  params.set("theme", options.theme);
+  params.set("boundary", options.boundary);
+  params.delete("layout");
+  params.set("animated", "true");
+  params.set("interval", String(DEFAULT_ANIMATION_INTERVAL_SECONDS));
+
+  if (options.transparentBackground) {
+    params.set("transparent", "true");
+  } else {
+    params.delete("transparent");
+  }
+  if (options.showBorder) {
+    params.delete("border");
+  } else {
+    params.set("border", "false");
+  }
+  if (options.githubColors) {
+    params.delete("github_colors");
+  } else {
+    params.set("github_colors", "false");
+  }
+}
 
 export default function LanguagePieChart({
   initialUsername = "",
@@ -90,15 +173,14 @@ export default function LanguagePieChart({
   const [repositoryCount, setRepositoryCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [embedFormat, setEmbedFormat] = useState<EmbedFormat>("markdown");
-  const [languageCount, setLanguageCount] = useState<LanguageCountOption>("8");
+  const [languageCount, setLanguageCount] =
+    useState<LanguageCountOption>(DEFAULT_LANGUAGE_COUNT);
   const [hiddenLanguages, setHiddenLanguages] = useState("");
-  const [theme, setTheme] = useState<ThemeOption>("github-dark");
+  const [theme, setTheme] = useState<CardThemeName>(DEFAULT_THEME);
+  const [boundary, setBoundary] = useState<BoundaryPosition>(DEFAULT_BOUNDARY);
   const [transparentBackground, setTransparentBackground] = useState(false);
   const [showBorder, setShowBorder] = useState(true);
   const [githubColors, setGithubColors] = useState(true);
-  const [animatedLabels, setAnimatedLabels] = useState(false);
-  const [animationInterval, setAnimationInterval] =
-    useState<AnimationIntervalOption>("2");
   const [previewVersion, setPreviewVersion] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -114,6 +196,8 @@ export default function LanguagePieChart({
 
   const startLoop = useCallback((delay = 0) => {
     stopLoop();
+    if (dataLengthRef.current <= 1) return;
+
     resumeTimerRef.current = setTimeout(() => {
       intervalRef.current = setInterval(() => {
         activeIndexRef.current = (activeIndexRef.current + 1) % dataLengthRef.current;
@@ -145,25 +229,22 @@ export default function LanguagePieChart({
   const buildImageUrl = useCallback((username: string, privateScope: boolean) => {
     if (!origin) return "";
     const params = new URLSearchParams();
-    if (username.trim()) params.set("username", username.trim());
-    if (privateScope) {
-      params.set("include_private", "true");
-      if (privateCardToken) params.set("card_token", privateCardToken);
-    }
-    params.set("count", languageCount);
-    if (hiddenLanguages.trim()) params.set("hide", hiddenLanguages.trim());
-    params.set("theme", theme);
-    if (animatedLabels) {
-      params.set("animated", "true");
-      params.set("interval", animationInterval);
-    }
-    if (transparentBackground) params.set("transparent", "true");
-    if (!showBorder) params.set("border", "false");
-    if (!githubColors) params.set("github_colors", "false");
+    applyCardSearchParams(params, {
+      boundary,
+      count: languageCount,
+      githubColors,
+      hiddenLanguages,
+      includeCardToken: true,
+      includePrivate: privateScope,
+      privateCardToken,
+      showBorder,
+      theme,
+      transparentBackground,
+      username,
+    });
     return `${origin}/api/languages.svg?${params.toString()}`;
   }, [
-    animatedLabels,
-    animationInterval,
+    boundary,
     githubColors,
     hiddenLanguages,
     languageCount,
@@ -237,16 +318,14 @@ export default function LanguagePieChart({
       dataLengthRef.current = finalData.length;
       activeIndexRef.current = 0;
       setActiveIndex(0);
-      if (finalData.length > 0) {
-        startLoop(INITIAL_DELAY_MS);
-      } else {
-        stopLoop();
-      }
+      startLoop(INITIAL_DELAY_MS);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Language fetch failed.";
       setError(message);
       setData([]);
       setRepositoryCount(0);
+      dataLengthRef.current = 0;
+      activeIndexRef.current = 0;
       stopLoop();
     } finally {
       setLoading(false);
@@ -268,37 +347,21 @@ export default function LanguagePieChart({
     const initialPrivate = params.get("include_private") === "true";
     const initialCount = params.get("count");
     const initialTheme = params.get("theme");
-    const initialInterval = params.get("interval");
+    const initialBoundary = params.get("boundary");
     const resolvedUsername = initialUsernameFromUrl || initialUsername;
-    const resolvedCount =
-      initialCount === "5" ||
-      initialCount === "8" ||
-      initialCount === "10" ||
-      initialCount === "all"
-        ? initialCount
-        : "8";
+    const resolvedCount = isLanguageCountOption(initialCount)
+      ? initialCount
+      : DEFAULT_LANGUAGE_COUNT;
     const resolvedHiddenLanguages = params.get("hide") ?? "";
     setUsernameInput(resolvedUsername);
     setIncludePrivate(initialPrivate);
     setLanguageCount(resolvedCount);
     setHiddenLanguages(resolvedHiddenLanguages);
-    if (
-      initialTheme === "dark" ||
-      initialTheme === "light" ||
-      initialTheme === "transparent" ||
-      initialTheme === "github-dark" ||
-      initialTheme === "github-light"
-    ) {
+    if (isCardThemeName(initialTheme)) {
       setTheme(initialTheme);
     }
-    setAnimatedLabels(params.get("animated") === "true");
-    if (
-      initialInterval === "1" ||
-      initialInterval === "2" ||
-      initialInterval === "3" ||
-      initialInterval === "5"
-    ) {
-      setAnimationInterval(initialInterval);
+    if (isBoundaryPosition(initialBoundary)) {
+      setBoundary(initialBoundary);
     }
     setTransparentBackground(params.get("transparent") === "true");
     setShowBorder(params.get("border") !== "false");
@@ -316,46 +379,18 @@ export default function LanguagePieChart({
     event.preventDefault();
     const trimmed = usernameInput.trim();
     const url = new URL(window.location.href);
-    if (trimmed) {
-      url.searchParams.set("username", trimmed);
-    } else {
-      url.searchParams.delete("username");
-    }
-    if (includePrivate) {
-      url.searchParams.set("include_private", "true");
-    } else {
-      url.searchParams.delete("include_private");
-    }
-    url.searchParams.set("count", languageCount);
-    if (hiddenLanguages.trim()) {
-      url.searchParams.set("hide", hiddenLanguages.trim());
-    } else {
-      url.searchParams.delete("hide");
-    }
-    url.searchParams.set("theme", theme);
-    url.searchParams.delete("layout");
-    if (animatedLabels) {
-      url.searchParams.set("animated", "true");
-      url.searchParams.set("interval", animationInterval);
-    } else {
-      url.searchParams.delete("animated");
-      url.searchParams.delete("interval");
-    }
-    if (transparentBackground) {
-      url.searchParams.set("transparent", "true");
-    } else {
-      url.searchParams.delete("transparent");
-    }
-    if (showBorder) {
-      url.searchParams.delete("border");
-    } else {
-      url.searchParams.set("border", "false");
-    }
-    if (githubColors) {
-      url.searchParams.delete("github_colors");
-    } else {
-      url.searchParams.set("github_colors", "false");
-    }
+    applyCardSearchParams(url.searchParams, {
+      boundary,
+      count: languageCount,
+      githubColors,
+      hiddenLanguages,
+      includePrivate,
+      privateCardToken,
+      showBorder,
+      theme,
+      transparentBackground,
+      username: trimmed,
+    });
     window.history.replaceState({}, "", url);
     fetchData(trimmed, includePrivate);
   };
@@ -369,7 +404,7 @@ export default function LanguagePieChart({
   return (
     <div className="flex w-full flex-col rounded-lg border border-[#2ea043]/40 bg-[#0d1117] p-4 shadow-[0_0_20px_rgba(46,160,67,0.15)] md:p-6">
       <div className="mb-4">
-        <h2 className="text-xl font-bold tracking-wider text-[#F2F3F5]">Language Distribution</h2>
+        <h2 className="text-xl font-bold tracking-wider text-[#F2F3F5]">{CARD_TITLE}</h2>
         <p className="mt-1 text-xs text-[#949BA4]">
           {activeUsername ? `@${activeUsername} · ${repositoryCount} repositories` : "Loading..."}
         </p>
@@ -404,7 +439,18 @@ export default function LanguagePieChart({
                 const nextCount = event.target.value as LanguageCountOption;
                 const nextUsername = usernameInput.trim() || activeUsername;
                 const url = new URL(window.location.href);
-                url.searchParams.set("count", nextCount);
+                applyCardSearchParams(url.searchParams, {
+                  boundary,
+                  count: nextCount,
+                  githubColors,
+                  hiddenLanguages,
+                  includePrivate,
+                  privateCardToken,
+                  showBorder,
+                  theme,
+                  transparentBackground,
+                  username: nextUsername,
+                });
                 window.history.replaceState({}, "", url);
                 setLanguageCount(nextCount);
                 setCopied(false);
@@ -428,7 +474,7 @@ export default function LanguagePieChart({
             <select
               value={theme}
               onChange={(event) => {
-                setTheme(event.target.value as ThemeOption);
+                setTheme(event.target.value as CardThemeName);
                 setCopied(false);
               }}
               className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm font-normal normal-case text-[#F2F3F5] outline-none transition focus:border-[#2ea043]"
@@ -438,6 +484,22 @@ export default function LanguagePieChart({
               <option value="dark">Dark</option>
               <option value="light">Light</option>
               <option value="transparent">Transparent</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[#8b949e]">
+            Boundary
+            <select
+              value={boundary}
+              onChange={(event) => {
+                setBoundary(event.target.value as BoundaryPosition);
+                setCopied(false);
+              }}
+              className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm font-normal normal-case text-[#F2F3F5] outline-none transition focus:border-[#2ea043]"
+            >
+              <option value="top">Top</option>
+              <option value="right">Right</option>
+              <option value="bottom">Bottom</option>
+              <option value="left">Left</option>
             </select>
           </label>
           <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[#8b949e] md:col-span-3">
@@ -490,37 +552,6 @@ export default function LanguagePieChart({
               Border
             </label>
           </div>
-          <div className="grid gap-3 md:col-span-3 md:grid-cols-[1fr_160px]">
-            <label className="flex items-center gap-2 text-sm text-[#c9d1d9]">
-              <input
-                type="checkbox"
-                checked={animatedLabels}
-                onChange={(event) => {
-                  setAnimatedLabels(event.target.checked);
-                  setCopied(false);
-                }}
-                className="h-4 w-4 accent-[#2ea043]"
-              />
-              Animate language labels
-            </label>
-            <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide text-[#8b949e]">
-              Interval
-              <select
-                value={animationInterval}
-                onChange={(event) => {
-                  setAnimationInterval(event.target.value as AnimationIntervalOption);
-                  setCopied(false);
-                }}
-                disabled={!animatedLabels}
-                className="h-10 rounded-md border border-[#30363d] bg-[#161b22] px-3 text-sm font-normal normal-case text-[#F2F3F5] outline-none transition focus:border-[#2ea043] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <option value="1">1 sec</option>
-                <option value="2">2 sec</option>
-                <option value="3">3 sec</option>
-                <option value="5">5 sec</option>
-              </select>
-            </label>
-          </div>
         </form>
         {includePrivate && !isSignedIn && !privateCardToken ? (
           <p className="mt-2 text-xs text-[#f0b72f]">
@@ -558,6 +589,8 @@ export default function LanguagePieChart({
                 outerRadius="70%"
                 dataKey="percentage"
                 stroke="none"
+                startAngle={RECHARTS_BOUNDARY_ANGLES[boundary]}
+                endAngle={RECHARTS_BOUNDARY_ANGLES[boundary] + 360}
                 shape={renderShape}
                 onMouseEnter={(_, index) => {
                   stopLoop();
