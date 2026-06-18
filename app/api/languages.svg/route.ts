@@ -11,6 +11,7 @@ import {
   formatBytes,
   formatPercent,
   parseBoundary,
+  parseCardSize,
   parseTheme,
   truncateLabel,
   type BoundaryPosition,
@@ -30,6 +31,7 @@ interface CardOptions {
   boundary: BoundaryPosition;
   githubColors: boolean;
   interval: number;
+  size: number;
   theme: CardThemeName;
   transparent: boolean;
 }
@@ -66,6 +68,7 @@ function parseCardOptions(request: NextRequest): CardOptions {
       true
     ),
     interval: parseInterval(request.nextUrl.searchParams.get("interval")),
+    size: parseCardSize(request.nextUrl.searchParams.get("size")),
     theme,
     transparent:
       theme === "transparent" ||
@@ -396,7 +399,7 @@ function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
   );
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeXml(stats.username)} GitHub language stats">
+<svg width="${options.size}" height="${options.size}" viewBox="0 0 ${width} ${height}" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeXml(stats.username)} GitHub language stats">
   ${interactionStyles}
   ${renderShell(width, height, theme, options)}
   ${renderCardHeading(width, theme)}
@@ -417,6 +420,7 @@ function renderErrorSvg(message: string) {
     githubColors: true,
     animated: false,
     interval: DEFAULT_ANIMATION_INTERVAL_SECONDS,
+    size: 420,
     theme: "github-dark",
     transparent: false,
   })}

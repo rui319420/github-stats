@@ -24,11 +24,11 @@ Users can choose:
 - Public repository language stats for any GitHub username
 - GitHub OAuth login for private repository language stats
 - Copy-ready Markdown generator in the web UI
-- Custom themes, hidden languages, borders, language count, and boundary position
+- Custom themes, selectable hidden languages, borders, language count, and boundary position
 - Animated language labels inside the SVG card
 - Encrypted `card_token` support for private README cards
 - JSON API for custom clients
-- Built with Next.js App Router, React, Recharts, and Octokit
+- Built with Next.js App Router, React, SVG, and Octokit
 
 ## Quick Start
 
@@ -159,9 +159,10 @@ All options can be set in the web UI or directly in the card URL.
 | Parameter | Values | Description |
 | --- | --- | --- |
 | `count` | `5`, `8`, `10`, `all` | Number of languages to show. |
-| `hide` | Comma-separated language names | Hide languages such as `HTML,CSS,Jupyter Notebook`. |
+| `hide` | Comma-separated language names | Hide languages such as `HTML,CSS,Jupyter Notebook`. The web UI lets users select from fetched languages. |
 | `theme` | `github-dark`, `github-light`, `dark`, `light`, `transparent` | Card color theme. |
 | `boundary` | `top`, `right`, `bottom`, `left` | Where the first language boundary appears on the donut. |
+| `size` | `300` to `720` | Square card size in pixels. Defaults to `420`. |
 | `transparent` | `true`, `false` | Force a transparent background. |
 | `github_colors` | `true`, `false` | Use GitHub language colors. Enabled by default. |
 | `border` | `true`, `false` | Show or hide the card border. |
@@ -174,6 +175,7 @@ Examples:
 /api/languages.svg?username=YOUR_GITHUB_USERNAME&count=5
 /api/languages.svg?username=YOUR_GITHUB_USERNAME&hide=HTML,CSS&theme=github-light
 /api/languages.svg?username=YOUR_GITHUB_USERNAME&boundary=right
+/api/languages.svg?username=YOUR_GITHUB_USERNAME&size=520
 /api/languages.svg?username=YOUR_GITHUB_USERNAME&transparent=true&border=false
 /api/languages.svg?username=YOUR_GITHUB_USERNAME&animated=true&interval=2
 ```

@@ -21,6 +21,9 @@ export const DEFAULT_LANGUAGE_COUNT: LanguageCountOption = "8";
 export const DEFAULT_THEME: CardThemeName = "github-dark";
 export const DEFAULT_BOUNDARY: BoundaryPosition = "top";
 export const DEFAULT_ANIMATION_INTERVAL_SECONDS = 2;
+export const DEFAULT_CARD_SIZE = 420;
+export const MIN_CARD_SIZE = 300;
+export const MAX_CARD_SIZE = 720;
 
 export const FALLBACK_LANGUAGE_PALETTE = [
   "#58a6ff",
@@ -117,6 +120,12 @@ export function parseBoundary(value: string | null): BoundaryPosition {
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+export function parseCardSize(value: string | number | null): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_CARD_SIZE;
+  return Math.round(clamp(parsed, MIN_CARD_SIZE, MAX_CARD_SIZE));
 }
 
 export function formatPercent(value: number): string {
