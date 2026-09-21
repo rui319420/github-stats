@@ -1,614 +1,700 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
-  CARD_TITLE,
-  DEFAULT_ANIMATION_INTERVAL_SECONDS,
-  DEFAULT_CARD_SIZE,
   DEFAULT_BOUNDARY,
   DEFAULT_LANGUAGE_COUNT,
   DEFAULT_THEME,
-  formatPercent,
   isBoundaryPosition,
   isCardThemeName,
   isLanguageCountOption,
+  formatPercent,
   type BoundaryPosition,
   type CardThemeName,
   type EmbedFormat,
   type LanguageCountOption,
 } from "../lib/chartOptions";
 
-interface LanguagePieChartProps {
+import InteractiveLanguageCard from "./InteractiveLanguageCard";
+import {
+  customizeLanguageStats,
+  type LanguageStats,
+} from "../lib/languageStats";
+import { SAMPLE_LANGUAGE_STATS } from "../lib/sampleLanguageStats";
+
+interface Props {
   initialUsername?: string;
   isSignedIn?: boolean;
+  oauthConfigured?: boolean;
+  privateCardToken?: string;
   privateCardError?: string;
-  privateCardToken?: string;
 }
 
-interface LanguageOption {
-  name: string;
-  percentage: number;
-}
-
-interface LanguagesApiResponse {
-  languages?: LanguageOption[];
-  error?: string;
-}
-
-interface CardSearchParamsOptions {
-  boundary: BoundaryPosition;
-  count: LanguageCountOption;
-  githubColors: boolean;
-  hiddenLanguages: string;
-  includeCardToken?: boolean;
-  includePrivate: boolean;
-  privateCardToken?: string;
-  showBorder: boolean;
-  theme: CardThemeName;
-  transparentBackground: boolean;
+interface Scan {
   username: string;
+  includePrivate: boolean;
+  revision: number;
 }
+type Status = "idle" | "loading" | "ready" | "error";
 
-function parseHiddenLanguagesInput(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function serializeHiddenLanguages(languages: string[]): string {
-  return languages.join(", ");
-}
-
-function applyCardSearchParams(
-  params: URLSearchParams,
-  options: CardSearchParamsOptions
-) {
-  const username = options.username.trim();
-  if (username) {
-    params.set("username", username);
-  } else {
-    params.delete("username");
-  }
-
-  if (options.includePrivate) {
-    params.set("include_private", "true");
-    if (options.includeCardToken && options.privateCardToken) {
-      params.set("card_token", options.privateCardToken);
-    } else {
-      params.delete("card_token");
-    }
-  } else {
-    params.delete("include_private");
-    params.delete("card_token");
-  }
-
-  params.set("count", options.count);
-  if (options.hiddenLanguages.trim()) {
-    params.set("hide", options.hiddenLanguages.trim());
-  } else {
-    params.delete("hide");
-  }
-  params.set("theme", options.theme);
-  params.set("boundary", options.boundary);
-  params.set("size", String(DEFAULT_CARD_SIZE));
-  params.delete("layout");
-  params.set("animated", "true");
-  params.set("interval", String(DEFAULT_ANIMATION_INTERVAL_SECONDS));
-
-  if (options.transparentBackground) {
-    params.set("transparent", "true");
-  } else {
-    params.delete("transparent");
-  }
-  if (options.showBorder) {
-    params.delete("border");
-  } else {
-    params.set("border", "false");
-  }
-  if (options.githubColors) {
-    params.delete("github_colors");
-  } else {
-    params.set("github_colors", "false");
-  }
-}
+const themes: [CardThemeName, string][] = [
+  ["github-dark", "GitHub ダーク"],
+  ["github-light", "GitHub ライト"],
+  ["dark", "ミッドナイト"],
+  ["light", "ホワイト"],
+  ["transparent", "透明"],
+];
+const usernamePattern = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 
 export default function LanguagePieChart({
   initialUsername = "",
   isSignedIn = false,
-  privateCardError,
+  oauthConfigured = false,
   privateCardToken,
-}: LanguagePieChartProps) {
-  const [mounted, setMounted] = useState(false);
+  privateCardError,
+}: Props) {
   const [origin, setOrigin] = useState("");
-  const [usernameInput, setUsernameInput] = useState(initialUsername);
-  const [activeUsername, setActiveUsername] = useState(initialUsername);
+  const [input, setInput] = useState(initialUsername);
   const [includePrivate, setIncludePrivate] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [embedFormat, setEmbedFormat] = useState<EmbedFormat>("markdown");
-  const [languageCount, setLanguageCount] =
-    useState<LanguageCountOption>(DEFAULT_LANGUAGE_COUNT);
-  const [hiddenLanguages, setHiddenLanguages] = useState("");
+  const [scan, setScan] = useState<Scan | null>(null);
+  const [stats, setStats] = useState<LanguageStats | null>(null);
+  const [status, setStatus] = useState<Status>("idle");
+  const [error, setError] = useState("");
   const [theme, setTheme] = useState<CardThemeName>(DEFAULT_THEME);
-  const [boundary, setBoundary] = useState<BoundaryPosition>(DEFAULT_BOUNDARY);
-  const [transparentBackground, setTransparentBackground] = useState(false);
-  const [showBorder, setShowBorder] = useState(true);
-  const [githubColors, setGithubColors] = useState(true);
-  const [languageOptions, setLanguageOptions] = useState<LanguageOption[]>([]);
-  const [languageOptionsLoading, setLanguageOptionsLoading] = useState(false);
-  const [languageOptionsError, setLanguageOptionsError] = useState<string | null>(null);
-
-  const selectedHiddenLanguages = useMemo(
-    () => parseHiddenLanguagesInput(hiddenLanguages),
-    [hiddenLanguages]
+  const [count, setCount] = useState<LanguageCountOption>(
+    DEFAULT_LANGUAGE_COUNT,
   );
-
-  const selectedHiddenLanguageSet = useMemo(
-    () => new Set(selectedHiddenLanguages.map((language) => language.toLowerCase())),
-    [selectedHiddenLanguages]
+  const [boundary, setBoundary] = useState<BoundaryPosition>(DEFAULT_BOUNDARY);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [border, setBorder] = useState(true);
+  const [transparent, setTransparent] = useState(false);
+  const [githubColors, setGithubColors] = useState(true);
+  const [animated, setAnimated] = useState(true);
+  const [format, setFormat] = useState<EmbedFormat>("markdown");
+  const [imageState, setImageState] = useState({
+    url: "",
+    loaded: false,
+    error: false,
+  });
+  const [copiedCode, setCopiedCode] = useState("");
+  const [copyError, setCopyError] = useState("");
+  const codeRef = useRef<HTMLTextAreaElement>(null);
+  const canUsePrivate = Boolean(
+    isSignedIn && initialUsername && privateCardToken,
   );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setMounted(true);
       setOrigin(window.location.origin);
+      const url = new URL(window.location.href);
+      const params = url.searchParams;
+      // Card credentials belong in the shareable image URL, never in page history.
+      if (params.has("card_token")) {
+        params.delete("card_token");
+        window.history.replaceState({}, "", url);
+      }
+      const selectedTheme = params.get("theme");
+      const selectedCount = params.get("count");
+      const selectedBoundary = params.get("boundary");
+      if (isCardThemeName(selectedTheme)) setTheme(selectedTheme);
+      if (isLanguageCountOption(selectedCount)) setCount(selectedCount);
+      if (isBoundaryPosition(selectedBoundary)) setBoundary(selectedBoundary);
+      setHidden(
+        (params.get("hide") ?? "")
+          .split(",")
+          .map((name) => name.trim())
+          .filter(Boolean),
+      );
+      setBorder(params.get("border") !== "false");
+      setAnimated(params.get("animated") !== "false");
+      setGithubColors(params.get("github_colors") !== "false");
+      setTransparent(params.get("transparent") === "true");
+      const username = params.get("username")?.trim();
+      const wantsPrivate = ["true", "1", "yes", "on"].includes(
+        params.get("include_private")?.toLowerCase() ?? "",
+      );
+      if (
+        wantsPrivate &&
+        (!canUsePrivate ||
+          (username &&
+            username.toLowerCase() !== initialUsername.toLowerCase()))
+      ) {
+        setError(
+          "非公開カードは、連携した本人のユーザー名で作成してください。",
+        );
+        setStatus("error");
+        return;
+      }
+      if (username && usernamePattern.test(username)) {
+        setInput(username);
+        setIncludePrivate(wantsPrivate);
+        setStatus("loading");
+        setScan({ username, includePrivate: wantsPrivate, revision: 0 });
+      }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [canUsePrivate, initialUsername]);
 
-  const buildImageUrl = useCallback((username: string, privateScope: boolean) => {
-    if (!origin) return "";
-    const params = new URLSearchParams();
-    applyCardSearchParams(params, {
-      boundary,
-      count: languageCount,
-      githubColors,
-      hiddenLanguages,
-      includeCardToken: true,
-      includePrivate: privateScope,
-      privateCardToken,
-      showBorder,
-      theme,
-      transparentBackground,
-      username,
+  useEffect(() => {
+    if (!scan) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({
+      username: scan.username,
+      count: "all",
     });
-    return `${origin}/api/languages.svg?${params.toString()}`;
+    if (scan.includePrivate) params.set("include_private", "true");
+    // The same-origin JSON preview uses the session; only the image embed needs a card token.
+    async function load() {
+      try {
+        const response = await fetch(`/api/languages?${params}`, {
+          signal: controller.signal,
+        });
+        const payload = await response.json();
+        if (!response.ok)
+          throw new Error(
+            payload.error ?? "言語データを取得できませんでした。",
+          );
+        if (!Array.isArray(payload.languages))
+          throw new Error("言語データを確認できませんでした。");
+        if (!controller.signal.aborted) {
+          setStats(payload);
+          setStatus("ready");
+        }
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        setStats(null);
+        setStatus("error");
+        setError(
+          cause instanceof Error &&
+            !(cause instanceof TypeError) &&
+            !(cause instanceof SyntaxError)
+            ? cause.message
+            : "通信に失敗しました。接続を確認して再試行してください。",
+        );
+      }
+    }
+    void load();
+    return () => controller.abort();
+  }, [scan]);
+
+  const imageUrl = useMemo(() => {
+    if (!scan || status !== "ready" || !origin) return "";
+    const params = new URLSearchParams({
+      username: scan.username,
+      count,
+      theme,
+      boundary,
+      size: "420",
+      border: String(border),
+      animated: String(animated),
+      interval: "2",
+      github_colors: String(githubColors),
+    });
+    if (hidden.length) params.set("hide", hidden.join(","));
+    if (transparent) params.set("transparent", "true");
+    if (scan.includePrivate && privateCardToken) {
+      params.set("include_private", "true");
+      params.set("card_token", privateCardToken);
+    }
+    return `${origin}/api/languages.svg?${params}`;
   }, [
-    boundary,
-    githubColors,
-    hiddenLanguages,
-    languageCount,
+    scan,
+    status,
     origin,
-    privateCardToken,
-    showBorder,
+    count,
     theme,
-    transparentBackground,
+    boundary,
+    border,
+    animated,
+    githubColors,
+    hidden,
+    transparent,
+    privateCardToken,
   ]);
 
-  const imageUrl = useMemo(
-    () => buildImageUrl(activeUsername || usernameInput, includePrivate),
-    [activeUsername, buildImageUrl, includePrivate, usernameInput]
+  useEffect(() => {
+    if (!imageUrl) return;
+    const params = new URL(imageUrl).searchParams;
+    params.delete("card_token");
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}?${params}${window.location.hash}`,
+    );
+  }, [imageUrl]);
+
+  const previewStats = customizeLanguageStats(stats ?? SAMPLE_LANGUAGE_STATS, {
+    count: count === "all" ? "all" : (Number(count) as 5 | 8 | 10),
+    hideLanguages: hidden,
+  });
+  const previewKey = `${scan?.username ?? "sample"}:${scan?.revision ?? 0}:${previewStats.languages.map((language) => `${language.name}:${language.bytes}`).join(",")}`;
+
+  const hiddenNames = new Set(hidden.map((name) => name.toLowerCase()));
+  const hasLanguages = Boolean(
+    stats?.languages.some(
+      (language) => !hiddenNames.has(language.name.toLowerCase()),
+    ),
   );
+  const imageReady = imageState.url === imageUrl && imageState.loaded;
+  const imageFailed = imageState.url === imageUrl && imageState.error;
+  const canExport = Boolean(imageUrl && imageReady && hasLanguages);
+  const embedCode = !canExport
+    ? ""
+    : format === "html"
+      ? `<img src="${imageUrl.replaceAll("&", "&amp;")}" alt="${scan?.username} の GitHub 使用言語" />`
+      : `[![${scan?.username} の GitHub 使用言語](${imageUrl})](${origin})`;
+  const localOrigin =
+    origin &&
+    (new URL(origin).protocol !== "https:" ||
+      ["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname));
 
-  const embedCode = useMemo(() => {
-    if (!imageUrl || !origin) return "";
-    if (embedFormat === "html") {
-      return `<img src="${imageUrl}" alt="GitHub Language Stats" />`;
-    }
-    return `[![GitHub Language Stats](${imageUrl})](${origin})`;
-  }, [embedFormat, imageUrl, origin]);
-
-  const loadLanguageOptions = useCallback(async (
-    username: string,
-    privateScope: boolean
-  ) => {
-    const trimmed = username.trim();
-    if (!trimmed) {
-      setLanguageOptions([]);
-      setLanguageOptionsError(null);
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const username = includePrivate ? initialUsername : input.trim();
+    if (!usernamePattern.test(username)) {
+      setStats(null);
+      setScan(null);
+      setError("GitHub ユーザー名を半角英数字とハイフンで入力してください。");
+      setStatus("error");
       return;
     }
+    if (includePrivate && !canUsePrivate) return;
+    setStats(null);
+    setError("");
+    setCopyError("");
+    setStatus("loading");
+    setScan({ username, includePrivate, revision: Date.now() });
+  }
 
-    setLanguageOptionsLoading(true);
-    setLanguageOptionsError(null);
-    try {
-      const params = new URLSearchParams({
-        count: "all",
-        username: trimmed,
-      });
-      if (privateScope) {
-        params.set("include_private", "true");
-        if (privateCardToken) params.set("card_token", privateCardToken);
-      }
-      params.set("t", String(Date.now()));
-
-      const response = await fetch(`/api/languages?${params.toString()}`);
-      const payload = (await response.json()) as LanguagesApiResponse;
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Language options fetch failed.");
-      }
-      setLanguageOptions(payload.languages ?? []);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Language options fetch failed.";
-      setLanguageOptions([]);
-      setLanguageOptionsError(message);
-    } finally {
-      setLanguageOptionsLoading(false);
-    }
-  }, [privateCardToken]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const params = new URLSearchParams(window.location.search);
-      const initialUsernameFromUrl = params.get("username")?.trim() ?? "";
-      const initialPrivate = params.get("include_private") === "true";
-      const initialCount = params.get("count");
-      const initialTheme = params.get("theme");
-      const initialBoundary = params.get("boundary");
-      const resolvedUsername = initialUsernameFromUrl || initialUsername;
-      const resolvedCount = isLanguageCountOption(initialCount)
-        ? initialCount
-        : DEFAULT_LANGUAGE_COUNT;
-      const resolvedHiddenLanguages = params.get("hide") ?? "";
-      setUsernameInput(resolvedUsername);
-      setActiveUsername(resolvedUsername);
-      setIncludePrivate(initialPrivate);
-      setLanguageCount(resolvedCount);
-      setHiddenLanguages(resolvedHiddenLanguages);
-      if (isCardThemeName(initialTheme)) {
-        setTheme(initialTheme);
-      }
-      if (isBoundaryPosition(initialBoundary)) {
-        setBoundary(initialBoundary);
-      }
-      setTransparentBackground(params.get("transparent") === "true");
-      setShowBorder(params.get("border") !== "false");
-      setGithubColors(params.get("github_colors") !== "false");
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [initialUsername]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadLanguageOptions(activeUsername, includePrivate);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [activeUsername, includePrivate, loadLanguageOptions]);
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = usernameInput.trim();
-    const url = new URL(window.location.href);
-    applyCardSearchParams(url.searchParams, {
-      boundary,
-      count: languageCount,
-      githubColors,
-      hiddenLanguages,
-      includePrivate,
-      privateCardToken,
-      showBorder,
-      theme,
-      transparentBackground,
-      username: trimmed,
-    });
-    window.history.replaceState({}, "", url);
-    setActiveUsername(trimmed);
-    setCopied(false);
-  };
-
-  const copyEmbedCode = async () => {
+  async function copyCode() {
     if (!embedCode) return;
-    await navigator.clipboard.writeText(embedCode);
-    setCopied(true);
-  };
+    try {
+      await navigator.clipboard.writeText(embedCode);
+      setCopiedCode(embedCode);
+      setCopyError("");
+    } catch {
+      codeRef.current?.focus();
+      codeRef.current?.select();
+      setCopyError(
+        "自動コピーできませんでした。選択されたコードを手動でコピーしてください。",
+      );
+    }
+  }
 
-  const toggleHiddenLanguage = (language: string, hidden: boolean) => {
-    const nextLanguages = hidden
-      ? [...selectedHiddenLanguages, language]
-      : selectedHiddenLanguages.filter(
-          (selectedLanguage) =>
-            selectedLanguage.toLowerCase() !== language.toLowerCase()
-        );
-    setHiddenLanguages(serializeHiddenLanguages(nextLanguages));
-    setCopied(false);
-  };
+  function changeScope(checked: boolean) {
+    setIncludePrivate(checked);
+    if (checked) setInput(initialUsername);
+    setScan(null);
+    setStats(null);
+    setStatus("idle");
+    setError("");
+  }
 
   return (
-    <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
-      <section className="rounded-[28px] border border-[#e8eaed] bg-white p-4 shadow-[0_1px_2px_rgba(60,64,67,0.12),0_1px_3px_rgba(60,64,67,0.08)] sm:p-6">
-        <div className="mb-6 flex flex-col gap-2">
-          <p className="text-sm font-medium text-[#1a73e8]">Card settings</p>
-          <h2 className="text-2xl font-semibold tracking-tight text-[#202124]">{CARD_TITLE}</h2>
-          <p className="max-w-2xl text-sm leading-6 text-[#5f6368]">
-            Tune the data source, appearance, and embed format from one compact control panel.
-          </p>
+    <div className="builder-grid">
+      <section className="panel settings-panel" aria-labelledby="builder-title">
+        <div className="panel-heading">
+          <div>
+            <span className="eyebrow">01 / CUSTOMIZE</span>
+            <h2 id="builder-title">自分のカードを作る</h2>
+          </div>
+          <span className="small-muted">公開カードはログイン不要</span>
         </div>
-
-        <form className="grid gap-5 md:grid-cols-3" onSubmit={handleSubmit}>
-          <label className="grid gap-2 text-sm font-medium text-[#3c4043] md:col-span-2">
-            GitHub username
-            <input
-              value={usernameInput}
-              onChange={(event) => setUsernameInput(event.target.value)}
-              placeholder="GitHub username"
-              className="h-12 rounded-full border border-[#dadce0] bg-white px-5 text-sm text-[#202124] outline-none transition-colors duration-200 placeholder:text-[#80868b] hover:border-[#bdc1c6] focus:border-[#1a73e8] focus:ring-2 focus:ring-[#1a73e8]/15"
-            />
-          </label>
-          <button
-            type="submit"
-            className="h-12 cursor-pointer self-end rounded-full bg-[#1a73e8] px-6 text-sm font-medium text-white shadow-[0_1px_2px_rgba(26,115,232,0.24)] transition-colors duration-200 hover:bg-[#1765cc] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/30"
-          >
-            Load
-          </button>
-          <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-[#f8fafd] px-4 py-3 text-sm font-medium text-[#3c4043] md:col-span-3">
-            <input
-              type="checkbox"
-              checked={includePrivate}
-              onChange={(event) => setIncludePrivate(event.target.checked)}
-              className="h-4 w-4 accent-[#1a73e8]"
-            />
-            Include private repositories
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-[#3c4043]">
-            Languages
-            <select
-              value={languageCount}
-              onChange={(event) => {
-                const nextCount = event.target.value as LanguageCountOption;
-                const nextUsername = usernameInput.trim() || activeUsername;
-                const url = new URL(window.location.href);
-                applyCardSearchParams(url.searchParams, {
-                  boundary,
-                  count: nextCount,
-                  githubColors,
-                  hiddenLanguages,
-                  includePrivate,
-                  privateCardToken,
-                  showBorder,
-                  theme,
-                  transparentBackground,
-                  username: nextUsername,
-                });
-                window.history.replaceState({}, "", url);
-                setActiveUsername(nextUsername);
-                setLanguageCount(nextCount);
-                setCopied(false);
-              }}
-              className="h-11 rounded-xl border border-[#dadce0] bg-white px-4 text-sm font-normal text-[#202124] outline-none transition-colors duration-200 hover:border-[#bdc1c6] focus:border-[#1a73e8] focus:ring-2 focus:ring-[#1a73e8]/15"
-            >
-              <option value="5">Top 5</option>
-              <option value="8">Top 8</option>
-              <option value="10">Top 10</option>
-              <option value="all">All</option>
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-[#3c4043]">
-            Theme
-            <select
-              value={theme}
-              onChange={(event) => {
-                setTheme(event.target.value as CardThemeName);
-                setCopied(false);
-              }}
-              className="h-11 rounded-xl border border-[#dadce0] bg-white px-4 text-sm font-normal text-[#202124] outline-none transition-colors duration-200 hover:border-[#bdc1c6] focus:border-[#1a73e8] focus:ring-2 focus:ring-[#1a73e8]/15"
-            >
-              <option value="github-dark">GitHub dark</option>
-              <option value="github-light">GitHub light</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-              <option value="transparent">Transparent</option>
-            </select>
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-[#3c4043]">
-            Boundary
-            <select
-              value={boundary}
-              onChange={(event) => {
-                setBoundary(event.target.value as BoundaryPosition);
-                setCopied(false);
-              }}
-              className="h-11 rounded-xl border border-[#dadce0] bg-white px-4 text-sm font-normal text-[#202124] outline-none transition-colors duration-200 hover:border-[#bdc1c6] focus:border-[#1a73e8] focus:ring-2 focus:ring-[#1a73e8]/15"
-            >
-              <option value="top">Top</option>
-              <option value="right">Right</option>
-              <option value="bottom">Bottom</option>
-              <option value="left">Left</option>
-            </select>
-          </label>
-          <div className="grid gap-2 md:col-span-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-[#3c4043]">
-                Hide languages
-              </span>
-              {selectedHiddenLanguages.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHiddenLanguages("");
-                    setCopied(false);
-                  }}
-                  className="cursor-pointer rounded-full px-3 py-1 text-sm font-medium text-[#1a73e8] transition-colors duration-200 hover:bg-[#e8f0fe]"
-                >
-                  Clear
-                </button>
-              ) : null}
-          </div>
-            <div className="max-h-52 overflow-y-auto rounded-2xl border border-[#e8eaed] bg-[#f8fafd] p-3">
-              {languageOptionsLoading ? (
-                <p className="text-sm text-[#5f6368]">Loading languages...</p>
-              ) : languageOptionsError ? (
-                <p className="text-sm text-[#d93025]">{languageOptionsError}</p>
-              ) : languageOptions.length > 0 ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {languageOptions.map((language) => {
-                    const checked = selectedHiddenLanguageSet.has(
-                      language.name.toLowerCase()
-                    );
-                    return (
-                      <label
-                        key={language.name}
-                        className="flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-full border border-[#e8eaed] bg-white px-3 py-2 text-sm text-[#3c4043] transition-colors duration-200 hover:border-[#d2e3fc] hover:bg-[#f8fbff]"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(event) =>
-                              toggleHiddenLanguage(
-                                language.name,
-                                event.target.checked
-                              )
-                            }
-                            className="h-4 w-4 shrink-0 accent-[#1a73e8]"
-                          />
-                          <span className="truncate">{language.name}</span>
-                        </span>
-                        <span className="shrink-0 text-xs text-[#5f6368]">
-                          {formatPercent(language.percentage)}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-[#5f6368]">
-                  Load a GitHub username to choose languages.
-                </p>
-              )}
+        <form onSubmit={submit} className="builder-form">
+          <div className="field">
+            <label htmlFor="username">GitHub ユーザー名</label>
+            <div className="username-row">
+              <div className="username-input">
+                <span aria-hidden="true">@</span>
+                <input
+                  id="username"
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  placeholder="octocat"
+                  maxLength={39}
+                  required
+                  readOnly={includePrivate}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-describedby="username-help"
+                />
+              </div>
+              <button
+                className="button primary"
+                type="submit"
+                disabled={status === "loading"}
+              >
+                {status === "loading" ? "集計中…" : "カードを作成"}
+              </button>
             </div>
+            <p className="field-help" id="username-help">
+              所有するリポジトリの言語を、コード量で集計します。
+            </p>
           </div>
-          <div className="grid gap-3 text-sm font-medium text-[#3c4043] md:col-span-3 md:grid-cols-3">
-            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[#e8eaed] px-4 py-3 transition-colors duration-200 hover:bg-[#f8fafd]">
+          <div className="private-option">
+            <label className="check-row">
               <input
                 type="checkbox"
-                checked={transparentBackground}
-                onChange={(event) => {
-                  setTransparentBackground(event.target.checked);
-                  setCopied(false);
-                }}
-                className="h-4 w-4 accent-[#1a73e8]"
+                checked={includePrivate}
+                disabled={!canUsePrivate}
+                onChange={(event) => changeScope(event.target.checked)}
               />
-              Transparent background
+              <span>
+                非公開リポジトリを含める<span className="badge">任意</span>
+              </span>
             </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[#e8eaed] px-4 py-3 transition-colors duration-200 hover:bg-[#f8fafd]">
+            <p className="field-help">
+              {canUsePrivate ? (
+                "連携した本人のリポジトリを集計します。公開してよい場合に選択してください。"
+              ) : oauthConfigured ? (
+                <>
+                  <a href="#privacy">GitHub と連携</a>すると選択できます。
+                </>
+              ) : (
+                "管理者が GitHub 連携を設定すると利用できます。"
+              )}
+            </p>
+            {privateCardError && (
+              <p className="error-text" role="alert">
+                {privateCardError}
+              </p>
+            )}
+            {includePrivate && (
+              <p className="privacy-note">
+                共有URLを知る人は、言語・コード量・割合・リポジトリ数を閲覧できます。リポジトリ名やソースコードは表示しません。
+              </p>
+            )}
+          </div>
+          <div className="section-rule">
+            <span>デザインを整える</span>
+          </div>
+          <div className="field-grid">
+            <label className="field">
+              テーマ
+              <select
+                aria-label="テーマ"
+                value={theme}
+                onChange={(event) =>
+                  setTheme(event.target.value as CardThemeName)
+                }
+              >
+                {themes.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              表示する言語数
+              <select
+                aria-label="表示する言語数"
+                value={count}
+                onChange={(event) =>
+                  setCount(event.target.value as LanguageCountOption)
+                }
+              >
+                <option value="5">上位 5 言語</option>
+                <option value="8">上位 8 言語</option>
+                <option value="10">上位 10 言語</option>
+                <option value="all">すべての言語</option>
+              </select>
+            </label>
+          </div>
+          <p className="field-help">
+            表示数を超える言語は「その他」にまとめ、全体の割合を保ちます。
+          </p>
+          <div className="switch-grid">
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={animated}
+                onChange={(event) => setAnimated(event.target.checked)}
+              />
+              アニメーション
+            </label>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={border}
+                onChange={(event) => setBorder(event.target.checked)}
+              />
+              枠線を表示
+            </label>
+            <label className="check-row">
               <input
                 type="checkbox"
                 checked={githubColors}
-                onChange={(event) => {
-                  setGithubColors(event.target.checked);
-                  setCopied(false);
-                }}
-                className="h-4 w-4 accent-[#1a73e8]"
+                onChange={(event) => setGithubColors(event.target.checked)}
               />
-              GitHub language colors
+              GitHub の言語色
             </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[#e8eaed] px-4 py-3 transition-colors duration-200 hover:bg-[#f8fafd]">
+            <label className="check-row">
               <input
                 type="checkbox"
-                checked={showBorder}
-                onChange={(event) => {
-                  setShowBorder(event.target.checked);
-                  setCopied(false);
-                }}
-                className="h-4 w-4 accent-[#1a73e8]"
+                checked={transparent}
+                onChange={(event) => setTransparent(event.target.checked)}
               />
-              Border
+              背景を透明に
             </label>
           </div>
+          <details className="advanced">
+            <summary>言語の除外・グラフの開始位置</summary>
+            <label className="field">
+              グラフの開始位置
+              <select
+                aria-label="グラフの開始位置"
+                value={boundary}
+                onChange={(event) =>
+                  setBoundary(event.target.value as BoundaryPosition)
+                }
+              >
+                <option value="top">上</option>
+                <option value="right">右</option>
+                <option value="bottom">下</option>
+                <option value="left">左</option>
+              </select>
+            </label>
+            <div className="language-heading">
+              <span>非表示にする言語</span>
+              {hidden.length > 0 && (
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => setHidden([])}
+                >
+                  選択を解除
+                </button>
+              )}
+            </div>
+            <p className="field-help">
+              チェックした言語を除外して割合を再計算します。
+            </p>
+            {stats?.languages.length ? (
+              <div className="language-options">
+                {stats.languages.map((language) => (
+                  <label
+                    className="check-row language-option"
+                    key={language.name}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={hiddenNames.has(language.name.toLowerCase())}
+                      onChange={(event) =>
+                        setHidden(
+                          event.target.checked
+                            ? [...hidden, language.name]
+                            : hidden.filter(
+                                (name) =>
+                                  name.toLowerCase() !==
+                                  language.name.toLowerCase(),
+                              ),
+                        )
+                      }
+                    />
+                    <span>{language.name}</span>
+                    <small>{formatPercent(language.percentage)}</small>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-help">カードを作成すると言語を選べます。</p>
+            )}
+          </details>
+          {status === "error" && (
+            <div className="error-box" role="alert">
+              {error}
+              <span>
+                ユーザー名や接続を確認して、もう一度作成してください。
+              </span>
+            </div>
+          )}
         </form>
-        {includePrivate && !isSignedIn && !privateCardToken ? (
-          <p className="mt-4 rounded-2xl bg-[#fef7e0] px-4 py-3 text-sm text-[#795548]">
-            Sign in with GitHub to generate a private repository card URL.
-          </p>
-        ) : null}
-        {includePrivate && privateCardError ? (
-          <p className="mt-4 rounded-2xl bg-[#fce8e6] px-4 py-3 text-sm text-[#d93025]">{privateCardError}</p>
-        ) : null}
+        <div className="method-note">
+          <span className="dot" />
+          フォーク・アーカイブを除外。バイト数に基づく割合で、習熟度を表すものではありません。
+        </div>
       </section>
 
-      <aside className="grid gap-6">
-        <section className="rounded-[28px] border border-[#e8eaed] bg-white p-4 shadow-[0_1px_2px_rgba(60,64,67,0.12),0_1px_3px_rgba(60,64,67,0.08)] sm:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-lg font-semibold tracking-tight text-[#202124]">
-              Preview
-            </h3>
-            <span className="rounded-full bg-[#e8f0fe] px-3 py-1 text-xs font-medium text-[#1967d2]">
-              Live
+      <div className="preview-column">
+        <section
+          className="panel preview-panel"
+          aria-labelledby="preview-title"
+        >
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">02 / PREVIEW</span>
+              <h2 id="preview-title">仕上がりを確認</h2>
+            </div>
+            <span className={imageReady ? "status-pill ready" : "status-pill"}>
+              {status === "loading"
+                ? "集計中"
+                : imageUrl
+                  ? imageReady
+                    ? "プレビュー"
+                    : "読み込み中"
+                  : "サンプル"}
             </span>
           </div>
-          <div className="overflow-x-auto rounded-3xl border border-[#e8eaed] bg-[#f8fafd] p-4">
-            {!mounted ? (
-              <div className="flex h-32 items-center justify-center text-sm text-[#5f6368]">
-                Loading...
+          <div
+            className="preview-stage"
+            aria-busy={
+              status === "loading" ||
+              Boolean(imageUrl && !imageReady && !imageFailed)
+            }
+          >
+            {status === "loading" ? (
+              <div className="preview-placeholder">
+                <span className="loading-ring" />
+                <strong>言語データを集計しています</strong>
+                <p>リポジトリ数によって時間がかかります。</p>
               </div>
-            ) : imageUrl ? (
-              <object
-                key={imageUrl}
-                data={imageUrl}
-                type="image/svg+xml"
-                aria-label="GitHub Language Stats preview"
-                className="max-w-none rounded-2xl"
-                style={{ height: DEFAULT_CARD_SIZE, width: DEFAULT_CARD_SIZE }}
-              >
-                GitHub Language Stats preview
-              </object>
             ) : (
-              <div className="flex h-32 items-center justify-center text-sm text-[#5f6368]">
-                No preview
-              </div>
+              <>
+                <InteractiveLanguageCard
+                  key={previewKey}
+                  stats={previewStats}
+                  options={{
+                    animated,
+                    border,
+                    boundary,
+                    githubColors,
+                    interval: 2,
+                    size: 420,
+                    theme,
+                    transparent,
+                  }}
+                />
+                {/* Validate the actual export separately; interaction stays within the page. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {imageUrl && (
+                  <img
+                    key={imageUrl}
+                    src={imageUrl}
+                    alt=""
+                    aria-hidden="true"
+                    className="export-image-check"
+                    referrerPolicy="no-referrer"
+                    onLoad={() =>
+                      setImageState({
+                        url: imageUrl,
+                        loaded: true,
+                        error: false,
+                      })
+                    }
+                    onError={() =>
+                      setImageState({
+                        url: imageUrl,
+                        loaded: false,
+                        error: true,
+                      })
+                    }
+                  />
+                )}
+                {imageFailed && (
+                  <p className="error-text" role="alert">
+                    画像を取得できませんでした。「カードを作成」から再試行してください。
+                  </p>
+                )}
+              </>
             )}
-            </div>
+          </div>
+          <div className="preview-caption" aria-live="polite">
+            {status === "loading" ? (
+              "GitHub から取得しています…"
+            ) : stats && scan ? (
+              <>
+                <span className="mono">@{scan.username}</span>
+                <span>
+                  {stats.repositoryCount} リポジトリ / {stats.languages.length}{" "}
+                  言語
+                </span>
+              </>
+            ) : (
+              "サンプルデータです。ユーザー名を入力して、自分の一枚に。"
+            )}
+          </div>
+          <p className="interaction-help">
+            円弧・凡例にカーソルを合わせると停止し、外すと続きから再生します。GitHub上では自動再生のみです。
+          </p>
+          {stats && !hasLanguages && (
+            <p className="empty-notice">
+              表示できる言語がありません。非表示の選択や対象リポジトリを確認してください。
+            </p>
+          )}
         </section>
 
-        <section className="rounded-[28px] border border-[#e8eaed] bg-white p-4 shadow-[0_1px_2px_rgba(60,64,67,0.12),0_1px_3px_rgba(60,64,67,0.08)] sm:p-6">
-          <div className="mb-4 inline-flex rounded-full bg-[#f1f3f4] p-1">
-            <button
-              type="button"
-              onClick={() => {
-                setEmbedFormat("markdown");
-                setCopied(false);
-              }}
-              className={`h-9 cursor-pointer rounded-full px-4 text-sm font-medium transition-colors duration-200 ${
-                embedFormat === "markdown"
-                  ? "bg-white text-[#1a73e8] shadow-[0_1px_2px_rgba(60,64,67,0.2)]"
-                  : "text-[#5f6368] hover:text-[#202124]"
-              }`}
-            >
-              Markdown
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEmbedFormat("html");
-                setCopied(false);
-              }}
-              className={`h-9 cursor-pointer rounded-full px-4 text-sm font-medium transition-colors duration-200 ${
-                embedFormat === "html"
-                  ? "bg-white text-[#1a73e8] shadow-[0_1px_2px_rgba(60,64,67,0.2)]"
-                  : "text-[#5f6368] hover:text-[#202124]"
-              }`}
-            >
-              HTML img
-            </button>
+        <section className="panel export-panel" aria-labelledby="export-title">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">03 / SHARE</span>
+              <h2 id="export-title">プロフィールに飾る</h2>
+            </div>
+            {canExport && (
+              <a
+                className="text-button"
+                href={imageUrl}
+                download={`github-languages-${scan?.username}.svg`}
+              >
+                SVG を保存 ↗
+              </a>
+            )}
           </div>
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <input
+          <div className="export-content">
+            <div className="format-switch" aria-label="埋め込み形式">
+              {(["markdown", "html"] as const).map((value) => (
+                <button
+                  type="button"
+                  key={value}
+                  aria-pressed={format === value}
+                  className={format === value ? "selected" : ""}
+                  onClick={() => {
+                    setFormat(value);
+                    setCopyError("");
+                  }}
+                >
+                  {value === "markdown" ? "Markdown" : "HTML"}
+                </button>
+              ))}
+            </div>
+            <label className="sr-only" htmlFor="embed-code">
+              埋め込みコード
+            </label>
+            <textarea
+              id="embed-code"
+              ref={codeRef}
               readOnly
               value={embedCode}
-              className="h-11 min-w-0 flex-1 rounded-full border border-[#dadce0] bg-white px-4 font-mono text-xs text-[#3c4043] outline-none focus:border-[#1a73e8] focus:ring-2 focus:ring-[#1a73e8]/15"
+              placeholder="カードを作成すると、埋め込みコードがここに表示されます。"
+              rows={3}
+              className="embed-code"
+              onFocus={(event) => event.target.select()}
             />
             <button
               type="button"
-              onClick={copyEmbedCode}
+              className="button primary copy-button"
+              onClick={copyCode}
               disabled={!embedCode}
-              className="h-11 cursor-pointer rounded-full border border-[#dadce0] px-5 text-sm font-medium text-[#1a73e8] transition-colors duration-200 hover:bg-[#f8fafd] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {copied ? "Copied" : "Copy"}
+              {copiedCode && copiedCode === embedCode
+                ? "コピーしました ✓"
+                : "埋め込みコードをコピー"}
             </button>
+            <p className="field-help" aria-live="polite">
+              {copyError ||
+                (copiedCode && copiedCode === embedCode
+                  ? "プロフィールの README.md に貼り付けてください。"
+                  : "ユーザー名と同じ名前のリポジトリの README.md に貼り付けます。")}
+            </p>
+            {localOrigin && (
+              <p className="local-notice">
+                ローカルで確認中です。GitHub に飾るには、公開 HTTPS URL
+                にデプロイしてからコードをコピーしてください。
+              </p>
+            )}
           </div>
         </section>
-      </aside>
+      </div>
     </div>
   );
 }

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="420" height="420" viewBox="0 0 420 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="card-title card-description">
+  <title id="card-title">your-name の使用言語</title>
+  <desc id="card-description">TypeScript 43.2%、Python 24.8%、JavaScript 17.6%、CSS 9.4%、HTML 5.0%。所有リポジトリのコード量に基づく割合。フォーク・アーカイブを除外。</desc>
+  <style>text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', sans-serif; } .numeric { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric: tabular-nums; }</style>
+  <style>
+    .active-language { opacity: 0; animation-delay: 1s; animation-fill-mode: backwards; animation-duration: 10s; animation-iteration-count: infinite; animation-timing-function: steps(1, end); }
+    .active-language-0 { animation-name: language-0; }
+        @keyframes language-0 {
+          
+          0.0000%, 19.9990% { opacity: 1; }
+          20.0000%, 100% { opacity: 0; }
+        }
+.active-language-1 { animation-name: language-1; }
+        @keyframes language-1 {
+          0%, 19.9990% { opacity: 0; }
+          20.0000%, 39.9990% { opacity: 1; }
+          40.0000%, 100% { opacity: 0; }
+        }
+.active-language-2 { animation-name: language-2; }
+        @keyframes language-2 {
+          0%, 39.9990% { opacity: 0; }
+          40.0000%, 59.9990% { opacity: 1; }
+          60.0000%, 100% { opacity: 0; }
+        }
+.active-language-3 { animation-name: language-3; }
+        @keyframes language-3 {
+          0%, 59.9990% { opacity: 0; }
+          60.0000%, 79.9990% { opacity: 1; }
+          80.0000%, 100% { opacity: 0; }
+        }
+.active-language-4 { animation-name: language-4; }
+        @keyframes language-4 {
+          0%, 79.9990% { opacity: 0; }
+          80.0000%, 99.9990% { opacity: 1; }
+          100.0000%, 100% { opacity: 0; }
+        }
+    @media (prefers-reduced-motion: reduce) {
+      .active-language { animation: none; opacity: 0; }
+      .active-language-0 { opacity: 1; }
+    }
+  </style>
+  <rect x="1" y="1" width="418" height="418" rx="18" fill="#0d1117" stroke="#30363d"/>
+  <text x="28" y="35" fill="#f0f6fc" font-size="17" font-weight="700">使用言語</text>
+  <text x="392" y="35" text-anchor="end" fill="#8b949e" font-size="10" letter-spacing="1.5">GITHUB STATS</text>
+  <text x="28" y="55" fill="#8b949e" font-size="12">@your-name</text>
+  <path d="M 210.000 101.000 A 82 82 0 0 1 243.979 257.629 L 234.034 235.786 A 58 58 0 0 0 210.000 125.000 Z" fill="#3178c6"><title>TypeScript: 43.2%</title></path><path d="M 243.979 257.629 A 82 82 0 0 1 135.804 217.914 L 157.520 207.695 A 58 58 0 0 0 234.034 235.786 Z" fill="#3572A5"><title>Python: 24.8%</title></path><path d="M 135.804 217.914 A 82 82 0 0 1 145.524 132.336 L 164.395 147.164 A 58 58 0 0 0 157.520 207.695 Z" fill="#f1e05a"><title>JavaScript: 17.6%</title></path><path d="M 145.524 132.336 A 82 82 0 0 1 184.661 105.013 L 192.077 127.839 A 58 58 0 0 0 164.395 147.164 Z" fill="#563d7c"><title>CSS: 9.4%</title></path><path d="M 184.661 105.013 A 82 82 0 0 1 210.000 101.000 L 210.000 125.000 A 58 58 0 0 0 192.077 127.839 Z" fill="#e34c26"><title>HTML: 5.0%</title></path><g class="active-language active-language-0" opacity="1">
+      <path d="M 210.000 91.000 A 92 92 0 0 1 248.123 266.730 L 246.465 263.089 A 88 88 0 0 0 210.000 95.000 Z" fill="#3178c6"/>
+      <text x="210" y="191" text-anchor="middle" fill="#3178c6" font-size="18" font-weight="700">TypeScript</text>
+      <path d="M 299.909 163.495 L 323.363 158.407 L 335.000 158.407" stroke="#3178c6" stroke-width="2"/>
+      <circle cx="335" cy="158.407" r="3" fill="#3178c6"/>
+      <text x="341" y="152.407" text-anchor="start" fill="#f0f6fc" font-size="12" font-weight="700" class="numeric">43.2%</text>
+      <text x="341" y="170.407" text-anchor="start" fill="#8b949e" font-size="10" class="numeric">422 KB</text>
+    </g><g class="active-language active-language-1" opacity="0">
+      <path d="M 248.123 266.730 A 92 92 0 0 1 126.756 222.172 L 130.375 220.469 A 88 88 0 0 0 246.465 263.089 Z" fill="#3572A5"/>
+      <text x="210" y="191" text-anchor="middle" fill="#3572A5" font-size="26" font-weight="700">Python</text>
+      <path d="M 178.293 269.364 L 170.021 281.000 L 85.000 281.000" stroke="#3572A5" stroke-width="2"/>
+      <circle cx="85" cy="281" r="3" fill="#3572A5"/>
+      <text x="79" y="275" text-anchor="end" fill="#f0f6fc" font-size="12" font-weight="700" class="numeric">24.8%</text>
+      <text x="79" y="293" text-anchor="end" fill="#8b949e" font-size="10" class="numeric">242 KB</text>
+    </g><g class="active-language active-language-2" opacity="0">
+      <path d="M 126.756 222.172 A 92 92 0 0 1 137.661 126.157 L 140.807 128.628 A 88 88 0 0 0 130.375 220.469 Z" fill="#f1e05a"/>
+      <text x="210" y="191" text-anchor="middle" fill="#f1e05a" font-size="18" font-weight="700">JavaScript</text>
+      <path d="M 118.588 172.617 L 94.741 169.909 L 85.000 169.909" stroke="#f1e05a" stroke-width="2"/>
+      <circle cx="85" cy="169.909" r="3" fill="#f1e05a"/>
+      <text x="79" y="163.909" text-anchor="end" fill="#f0f6fc" font-size="12" font-weight="700" class="numeric">17.6%</text>
+      <text x="79" y="181.909" text-anchor="end" fill="#8b949e" font-size="10" class="numeric">172 KB</text>
+    </g><g class="active-language active-language-3" opacity="0">
+      <path d="M 137.661 126.157 A 92 92 0 0 1 181.570 95.503 L 182.807 99.307 A 88 88 0 0 0 140.807 128.628 Z" fill="#563d7c"/>
+      <text x="210" y="191" text-anchor="middle" fill="#563d7c" font-size="26" font-weight="700">CSS</text>
+      <path d="M 157.336 107.564 L 143.598 87.886 L 85.000 87.886" stroke="#563d7c" stroke-width="2"/>
+      <circle cx="85" cy="87.886" r="3" fill="#563d7c"/>
+      <text x="79" y="81.886" text-anchor="end" fill="#f0f6fc" font-size="12" font-weight="700" class="numeric">9.4%</text>
+      <text x="79" y="99.886" text-anchor="end" fill="#8b949e" font-size="10" class="numeric">92 KB</text>
+    </g><g class="active-language active-language-4" opacity="0">
+      <path d="M 181.570 95.503 A 92 92 0 0 1 210.000 91.000 L 210.000 95.000 A 88 88 0 0 0 182.807 99.307 Z" fill="#e34c26"/>
+      <text x="210" y="191" text-anchor="middle" fill="#e34c26" font-size="26" font-weight="700">HTML</text>
+      <path d="M 195.608 92.133 L 191.854 85.000 L 85.000 85.000" stroke="#e34c26" stroke-width="2"/>
+      <circle cx="85" cy="85" r="3" fill="#e34c26"/>
+      <text x="79" y="79" text-anchor="end" fill="#f0f6fc" font-size="12" font-weight="700" class="numeric">5.0%</text>
+      <text x="79" y="97" text-anchor="end" fill="#8b949e" font-size="10" class="numeric">49 KB</text>
+    </g><g><title>TypeScript: 43.2%</title>
+      <circle cx="34" cy="309" r="4" fill="#3178c6"/>
+      <text x="46" y="313" fill="#f0f6fc" font-size="11">TypeScript</text>
+      <text x="196" y="313" text-anchor="end" fill="#8b949e" font-size="11" class="numeric">43.2%</text></g><g><title>Python: 24.8%</title>
+      <circle cx="228" cy="309" r="4" fill="#3572A5"/>
+      <text x="240" y="313" fill="#f0f6fc" font-size="11">Python</text>
+      <text x="390" y="313" text-anchor="end" fill="#8b949e" font-size="11" class="numeric">24.8%</text></g><g><title>JavaScript: 17.6%</title>
+      <circle cx="34" cy="333" r="4" fill="#f1e05a"/>
+      <text x="46" y="337" fill="#f0f6fc" font-size="11">JavaScript</text>
+      <text x="196" y="337" text-anchor="end" fill="#8b949e" font-size="11" class="numeric">17.6%</text></g><g><title>CSS: 9.4%</title>
+      <circle cx="228" cy="333" r="4" fill="#563d7c"/>
+      <text x="240" y="337" fill="#f0f6fc" font-size="11">CSS</text>
+      <text x="390" y="337" text-anchor="end" fill="#8b949e" font-size="11" class="numeric">9.4%</text></g><g><title>HTML: 5.0%</title>
+      <circle cx="34" cy="357" r="4" fill="#e34c26"/>
+      <text x="46" y="361" fill="#f0f6fc" font-size="11">HTML</text>
+      <text x="196" y="361" text-anchor="end" fill="#8b949e" font-size="11" class="numeric">5.0%</text></g>
+  <line x1="28" y1="384" x2="392" y2="384" stroke="#30363d"/>
+  <text x="28" y="403" fill="#8b949e" font-size="10">24 リポジトリ · 公開リポジトリ</text>
+  <text x="392" y="403" text-anchor="end" fill="#8b949e" font-size="10">コード量 / bytes</text>
+</svg>

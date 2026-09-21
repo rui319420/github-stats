@@ -1,213 +1,164 @@
 # GitHub Stats
 
-Beautiful GitHub language usage cards for profile READMEs.
+**あなたのコードを、プロフィールの一枚に。**
 
-Show what you actually build with, including private repositories when the user opts in with GitHub OAuth.
+GitHub の使用言語を、README にそのまま飾れる SVG カードにします。日本語のカード作成画面で、テーマ・表示言語・配色・アニメーションを調整し、Markdown または HTML をコピーできます。
 
-```md
-[![GitHub Language Stats](https://your-app.vercel.app/api/languages.svg?username=YOUR_GITHUB_USERNAME)](https://your-app.vercel.app)
-```
+- 公開リポジトリはログイン不要
+- 非公開リポジトリは、本人が GitHub と連携した場合だけ任意で集計
+- 使用言語をドーナツグラフ・凡例・割合で表示。選択中の言語は中央に、割合とコード量は引き出し線の先に表示
+- ダーク／ライト／透過テーマ、非表示言語、枠線、開始位置、アニメーション
+- SVG 画像なので GitHub プロフィールや通常の Markdown に埋め込み可能
+- リポジトリ名・ソースコード・GitHub のアクセストークンをカードに含めない
 
-## Why
+![カード見本（サンプルデータ）](public/example-language-card.svg)
 
-Most GitHub stats cards only show public activity. This project focuses on one thing: a clean language distribution card that can also include private repositories without exposing repository names or source code.
+上のカードはサンプルデータです。実際の言語割合は指定したユーザーから取得します。
 
-Users can choose:
+## ローカルで使う
 
-- Public repositories only
-- Public + private repositories through GitHub OAuth
-- A copy-ready Markdown snippet for their profile README
-
-## Features
-
-- SVG card endpoint that works in GitHub profile READMEs
-- Public repository language stats for any GitHub username
-- GitHub OAuth login for private repository language stats
-- Copy-ready Markdown generator in the web UI
-- Custom themes, selectable hidden languages, borders, language count, and boundary position
-- Animated language labels inside the SVG card
-- Encrypted `card_token` support for private README cards
-- JSON API for custom clients
-- Built with Next.js App Router, React, SVG, and Octokit
-
-## Quick Start
-
-Clone and install:
+Node.js **22.22 以降の 22 系、または 24 系**を推奨します。
 
 ```bash
-git clone https://github.com/YOUR_NAME/github-stats.git
-cd github-stats
-npm install
+npm ci
+cp .env.example .env.local
+npm run dev
 ```
 
-Create `.env.local`:
+[http://localhost:3000](http://localhost:3000) を開いて GitHub ユーザー名を入力します。公開カードだけなら OAuth の設定は不要です。未設定の環境では非公開連携を案内・無効化します。
 
-```env
-GITHUB_USERNAME=YOUR_GITHUB_USERNAME
-GITHUB_TOKEN=
-AUTH_SECRET=YOUR_RANDOM_SECRET
-AUTH_GITHUB_ID=YOUR_GITHUB_OAUTH_CLIENT_ID
-AUTH_GITHUB_SECRET=YOUR_GITHUB_OAUTH_CLIENT_SECRET
-NEXTAUTH_URL=http://localhost:3000
-DATABASE_URL=
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run build
+npm start
 ```
 
-Generate `AUTH_SECRET`:
+## プロフィールに飾る
+
+1. アプリでユーザー名を入力してカードを作成します。
+2. プレビューを見ながらテーマや表示言語を調整します。
+3. 埋め込みコードをコピーします。
+4. `ユーザー名/ユーザー名` リポジトリの `README.md` に貼り付けます。
+
+```md
+[![GitHub 使用言語](https://YOUR_DOMAIN/api/languages.svg?username=YOUR_USERNAME&theme=github-dark)](https://YOUR_DOMAIN)
+```
+
+GitHub から取得できる **公開 HTTPS URL** が必要です。`localhost` の画像は自分のブラウザーでの確認用です。GitHub の画像プロキシにもキャッシュがあるため、設定・コードの変更がすぐに反映されない場合があります。
+
+## 非公開リポジトリも含める
+
+### OAuth の設定
+
+[GitHub の OAuth Apps](https://github.com/settings/developers) で OAuth App を作成します。
+
+| 設定 | 開発時 | 公開時 |
+| --- | --- | --- |
+| Homepage URL | `http://localhost:3000` | `https://YOUR_DOMAIN` |
+| Authorization callback URL | `http://localhost:3000/api/auth/callback/github` | `https://YOUR_DOMAIN/api/auth/callback/github` |
+
+`.env.local` またはデプロイ先の環境変数に `AUTH_GITHUB_ID`、`AUTH_GITHUB_SECRET`、`AUTH_SECRET` を設定します。`AUTH_SECRET` は32文字以上のランダム値にしてください。
 
 ```bash
 openssl rand -base64 32
 ```
 
-Run locally:
+アプリで GitHub と連携し、「非公開リポジトリを含める」を有効にして埋め込みコードを作成します。集計対象は **連携した本人が所有するリポジトリ**です。他人や所属 Organization の非公開リポジトリは対象にしません。
 
-```bash
-npm run dev
-```
+### 公開される情報と権限
 
-Open http://localhost:3000.
+- 非公開を含むカードの URL は、**集計結果を閲覧できる共有リンク**です。README に貼ると、誰でも同じ言語名・コード量・割合・対象リポジトリ数を閲覧できます。
+- URL の `card_token` は AES-256-GCM で暗号化した集計用トークンです。GitHub のアクセストークンそのものを URL やブラウザー用セッションに渡しません。
+- 現行の OAuth App は `read:user repo` スコープを要求します。GitHub の `repo` は非公開リポジトリへの書き込み権限も含む広い権限です。本アプリは読み取り API のみ使いますが、権限の範囲を確認したうえで連携してください。
+- カードを失効させるには [GitHub の連携アプリ設定](https://github.com/settings/applications) で認可を取り消します。運営者が `AUTH_SECRET` を変更すると全ユーザーの既存カードとセッションが無効になります。
+- ログアウトだけでは作成済みの共有リンクは失効しません。既に保存・キャッシュされた画像や公開済みの集計値を回収することもできません。
+- URL を分析ログやエラー追跡へ送る場合は、`card_token` を必ずマスクしてください。
 
-## GitHub OAuth Setup
+OAuth の仕様は [GitHub 公式スコープ説明](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps) を参照してください。
 
-Create a GitHub OAuth App:
+## プレビューの操作
 
-```text
-GitHub Settings -> Developer settings -> OAuth Apps -> New OAuth App
-```
+アプリの円弧または凡例にカーソルを合わせると、その言語を強調して自動再生を一時停止します。外すと約2.1秒後にその言語の次へ進み、以後2秒ごとに切り替わります。最初の表示だけは3秒間です。Tabキーで言語にフォーカスしても停止し、フォーカスを外すと再開します。タッチでは言語をタップして選択できます。
 
-For local development:
+アニメーションを無効にした場合や、OS・ブラウザーで動きを減らす設定を選んだ場合は、自動で切り替えません。ホバー・キーボード・タッチによる選択はそのまま利用できます。
 
-```text
-Application name:
-GitHub Stats
+GitHub READMEに埋め込むSVG画像はマウス操作を受け取れないため、同じデザインの自動再生を表示します。ホバーと途中再開はアプリ内プレビューの機能です（[SVGの処理モード](https://www.w3.org/TR/SVG/conform.html)）。集計は一人の所有リポジトリのバイト数合計であり、複数ユーザーの平均ではありません。
 
-Homepage URL:
-http://localhost:3000
+## 集計ルール
 
-Authorization callback URL:
-http://localhost:3000/api/auth/callback/github
-```
+GitHub の [Languages API](https://docs.github.com/en/rest/repos/repos#list-repository-languages) が返す **言語ごとのバイト数**を合計します。コミット数・学習時間・習熟度の指標ではありません。
 
-For production:
+- 本人所有のリポジトリを全ページ取得します。
+- フォークとアーカイブ済みリポジトリは除外します。
+- 言語の固定除外はありません。HTML、CSS、ShaderLab、Jupyter Notebook も集計できます。
+- `hide` で指定した言語を除外してから割合を再計算します。
+- 表示数を超える言語は「その他」にまとめ、全体に対する割合を保ちます。
+- 空のリポジトリや GitHub 側で言語未判定のリポジトリには、言語データがありません。
+- 一部のリポジトリだけ取得できた場合に、不完全な集計を成功として返しません。
 
-```text
-Homepage URL:
-https://your-app.vercel.app
-
-Authorization callback URL:
-https://your-app.vercel.app/api/auth/callback/github
-```
-
-Copy the OAuth App values into `.env.local` or your hosting provider:
-
-```env
-AUTH_GITHUB_ID=Client ID
-AUTH_GITHUB_SECRET=Client Secret
-```
-
-## Profile README Usage
-
-Public repositories:
-
-```md
-[![GitHub Language Stats](https://your-app.vercel.app/api/languages.svg?username=YOUR_GITHUB_USERNAME)](https://your-app.vercel.app)
-```
-
-Customized card:
-
-```md
-[![GitHub Language Stats](https://your-app.vercel.app/api/languages.svg?username=YOUR_GITHUB_USERNAME&count=10&hide=HTML,CSS&theme=github-dark)](https://your-app.vercel.app)
-```
-
-Private repositories:
-
-1. Open your deployed app.
-2. Sign in with GitHub.
-3. Enable `Include private repositories`.
-4. Copy the generated Markdown.
-5. Paste it into your GitHub profile README.
-
-The private card URL includes an encrypted `card_token`:
-
-```md
-[![GitHub Language Stats](https://your-app.vercel.app/api/languages.svg?username=YOUR_GITHUB_USERNAME&include_private=true&card_token=...)](https://your-app.vercel.app)
-```
-
-You do not need to log in every time the card is displayed. Login is only needed when generating the private card URL.
-
-## API
-
-SVG card:
+## API・カスタマイズ
 
 ```text
-GET /api/languages.svg?username=YOUR_GITHUB_USERNAME
-GET /api/languages.svg?username=YOUR_GITHUB_USERNAME&include_private=true&card_token=...
+GET /api/languages.svg?username=YOUR_USERNAME
+GET /api/languages?username=YOUR_USERNAME
 ```
 
-JSON:
+JSON API は `username`、`includePrivate`、`repositoryCount`、`languages` を返します。`languages` の各要素は `name`、`bytes`、`percentage`（0〜1）です。
 
-```text
-GET /api/languages?username=YOUR_GITHUB_USERNAME
-GET /api/languages?username=YOUR_GITHUB_USERNAME&include_private=true&card_token=...
-```
-
-`include_private` accepts `1`, `true`, `yes`, or `on`.
-
-## Customization
-
-All options can be set in the web UI or directly in the card URL.
-
-| Parameter | Values | Description |
+| パラメーター | 値・既定値 | 説明 |
 | --- | --- | --- |
-| `count` | `5`, `8`, `10`, `all` | Number of languages to show. |
-| `hide` | Comma-separated language names | Hide languages such as `HTML,CSS,Jupyter Notebook`. The web UI lets users select from fetched languages. |
-| `theme` | `github-dark`, `github-light`, `dark`, `light`, `transparent` | Card color theme. |
-| `boundary` | `top`, `right`, `bottom`, `left` | Where the first language boundary appears on the donut. |
-| `size` | `300` to `720` | Square card size in pixels. Defaults to `420`. |
-| `transparent` | `true`, `false` | Force a transparent background. |
-| `github_colors` | `true`, `false` | Use GitHub language colors. Enabled by default. |
-| `border` | `true`, `false` | Show or hide the card border. |
-| `animated` | `true`, `false` | Cycle the active language label, highlight, percentage, and KB text. Enabled by default. |
-| `interval` | `1` to `10` | Seconds each language stays visible when `animated=true`. Defaults to `2`. |
+| `username` | GitHub ユーザー名 | 公開カードの対象 |
+| `include_private` | `false` | `true`、`1`、`yes`、`on` で非公開を含む。本人認証か有効なカードトークンが必須 |
+| `card_token` | アプリから発行 | 非公開を含む共有カードの閲覧権限 |
+| `count` | `5`、`8`（既定）、`10`、`all` | 上位言語数。残りは「その他」 |
+| `hide` | カンマ区切り | 除外言語。例：`HTML,CSS` |
+| `theme` | `github-dark`（既定）、`github-light`、`dark`、`light`、`transparent` | カードの配色 |
+| `boundary` | `top`（既定）、`right`、`bottom`、`left` | グラフの開始位置 |
+| `size` | 300〜720、既定420 | 画像の幅。言語数に応じて高さが伸びる |
+| `transparent` | `false` | 背景を透過 |
+| `github_colors` | `true` | GitHub の言語色を使用。未定義言語は名前から色を生成 |
+| `border` | `true` | 枠線を表示 |
+| `animated` | `true` | 中央の言語を順番に表示 |
+| `interval` | 1〜10秒、既定2秒 | アニメーションの切り替え間隔 |
 
-Examples:
+SVG はスクリプト・外部フォント・外部画像に依存しません。アニメーション無効時や動きを減らす設定でも、全言語の凡例を読めます。
 
-```text
-/api/languages.svg?username=YOUR_GITHUB_USERNAME&count=5
-/api/languages.svg?username=YOUR_GITHUB_USERNAME&hide=HTML,CSS&theme=github-light
-/api/languages.svg?username=YOUR_GITHUB_USERNAME&boundary=right
-/api/languages.svg?username=YOUR_GITHUB_USERNAME&size=520
-/api/languages.svg?username=YOUR_GITHUB_USERNAME&transparent=true&border=false
-/api/languages.svg?username=YOUR_GITHUB_USERNAME&animated=true&interval=2
-```
+## 環境変数
 
-## Environment Variables
+| 名前 | 用途 |
+| --- | --- |
+| `GITHUB_USERNAME` | API でユーザー名を省略した場合の既定値（任意） |
+| `GITHUB_TOKEN` | 公開 API のレート制限対策（任意）。失効時は公開取得のみ匿名で再試行。匿名の非公開集計には使いません |
+| `AUTH_SECRET` | OAuth セッションと非公開カードの暗号化に必須 |
+| `AUTH_GITHUB_ID` | OAuth Client ID |
+| `AUTH_GITHUB_SECRET` | OAuth Client Secret |
+| `NEXTAUTH_URL` | アプリの正式な URL。公開時は HTTPS |
 
-| Name | Required | Description |
-| --- | --- | --- |
-| `GITHUB_USERNAME` | Optional | Default GitHub username when `username` is not passed in the URL. |
-| `GITHUB_TOKEN` | Optional | Server-level GitHub token. Usually leave this empty when using OAuth. |
-| `AUTH_SECRET` | Yes for OAuth/private cards | Secret used by NextAuth and encrypted private card tokens. |
-| `AUTH_GITHUB_ID` | Yes for OAuth | GitHub OAuth App client ID. |
-| `AUTH_GITHUB_SECRET` | Yes for OAuth | GitHub OAuth App client secret. |
-| `NEXTAUTH_URL` | Yes in production | Canonical app URL, such as `https://your-app.vercel.app`. |
-| `DATABASE_URL` | Not currently used | Reserved for future database-backed sessions or token storage. |
+データベースは不要です。`DATABASE_URL` は使用していません。`.env.local` や秘密値は Git に追加しないでください。
 
-## Security Notes
+## デプロイ
 
-Private repository cards expose aggregated language percentages, not repository names or source code.
+Vercel などの Next.js 対応ホスト、または Node.js サーバーを利用できます。
 
-Anyone who can see a private `card_token` URL can request the same aggregated card. Treat that URL as shareable-but-sensitive. If you need to invalidate old private card URLs, revoke the GitHub OAuth authorization or rotate `AUTH_SECRET`.
+1. このリポジトリをホストに接続します。
+2. Node.js 22 系または 24 系を設定し、`npm ci` → `npm run build` を実行します。
+3. 上記環境変数をホストのシークレット設定へ登録します。
+4. OAuth のコールバック URL と `NEXTAUTH_URL` を実際の公開 URL に合わせます。
+5. 公開ユーザーの JSON／SVG、本人の非公開カードを確認してから README に貼ります。
 
-## Deploy
+公開集計は最大100ユーザーまで5分間再利用します。非公開のレスポンスとエラーは共有キャッシュに保存しない設定です。CDN・リバースプロキシを追加するときもこれを尊重し、クエリ付き URL とログの取り扱いに注意してください。
 
-Deploy to Vercel or any Next.js-compatible host.
+GitHub API のレート制限・失効した連携・存在しないユーザー・通信失敗は日本語のエラーとして返します。多数のリポジトリは集計に時間がかかるため、ホストの実行時間上限も確認してください。1プロセスの同時集計は最大4件で、超過時は429を返します。本番公開時はホスト側のWAF・IPレート制限も設定してください。
 
-After deployment:
+## 構成
 
-1. Set the environment variables in your hosting provider.
-2. Update your GitHub OAuth App callback URL.
-3. Open the app and copy your README Markdown.
-
-## Star This Project
-
-If this helps make your GitHub profile a little more honest about what you build, a star would mean a lot.
+- `app/page.tsx`：日本語のカード作成画面
+- `app/components/LanguagePieChart.tsx`：プレビュー・設定・埋め込みコード
+- `app/lib/githubLanguages.ts`：GitHub API と言語集計
+- `app/lib/languageStatsRequest.ts`：公開／非公開の権限境界
+- `app/lib/cardToken.ts`：集計用トークンの暗号化
+- `app/lib/renderLanguageCard.ts`：安全な SVG 描画
+- `auth.ts`：GitHub OAuth
+- `tests/`：集計・認証境界・描画の回帰テスト

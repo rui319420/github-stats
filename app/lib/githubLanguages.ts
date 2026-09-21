@@ -1,35 +1,12 @@
 import { Octokit } from "@octokit/rest";
-import {
-  DEFAULT_LANGUAGE_COUNT,
-  isLanguageCountOption,
-} from "./chartOptions";
+import { getGitHubAppAuthorization } from "./githubOAuth";
+import { DEFAULT_LANGUAGE_COUNT, isLanguageCountOption } from "./chartOptions";
+import { ApiError } from "./apiError";
+import { withAggregationSlot } from "./aggregationLimit";
 
-export interface LanguageData {
-  name: string;
-  bytes: number;
-  percentage: number;
-}
-
-export interface LanguageStats {
-  username: string;
-  includePrivate: boolean;
-  repositoryCount: number;
-  languages: LanguageData[];
-}
-
-export type LanguageCount = 5 | 8 | 10 | "all";
-
-export interface LanguageStatsDisplayOptions {
-  count?: LanguageCount;
-  hideLanguages?: string[];
-}
-
-const EXCLUDED_LANGUAGES = new Set([
-  "ShaderLab",
-  "HLSL",
-  "GLSL",
-  "Jupyter Notebook",
-]);
+import type { LanguageCount, LanguageStats } from "./languageStats";
+export type { LanguageCount, LanguageData, LanguageStats, LanguageStatsDisplayOptions } from "./languageStats";
+export { customizeLanguageStats } from "./languageStats";
 
 const GITHUB_USERNAME_RE = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
@@ -39,147 +16,110 @@ export function parseBooleanParam(value: string | null): boolean {
 }
 
 export function parseLanguageCount(value: string | null): LanguageCount {
-  if (!isLanguageCountOption(value)) {
-    return Number(DEFAULT_LANGUAGE_COUNT) as 5 | 8 | 10;
-  }
-  if (value === "all") return "all";
-  return Number(value) as 5 | 8 | 10;
+  if (!isLanguageCountOption(value)) return Number(DEFAULT_LANGUAGE_COUNT) as 5 | 8 | 10;
+  return value === "all" ? "all" : Number(value) as 5 | 8 | 10;
 }
 
 export function parseHiddenLanguages(value: string | null): string[] {
-  if (!value) return [];
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return value ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
 }
 
 export function resolveUsername(raw: string | null | undefined): string | null {
-  const username = raw?.trim() || process.env.GITHUB_USERNAME?.trim() || "";
-  if (!username || !GITHUB_USERNAME_RE.test(username)) return null;
-  return username;
+  const username = (raw ?? process.env.GITHUB_USERNAME ?? "").trim();
+  return GITHUB_USERNAME_RE.test(username) ? username : null;
 }
 
-function createOctokit(token?: string) {
-  return new Octokit({
-    auth: token || process.env.GITHUB_TOKEN || undefined,
-  });
-}
-
-async function listRepositories(
-  username: string,
-  includePrivate: boolean,
-  token?: string
-) {
-  const octokit = createOctokit(token);
-
+async function listRepositories(octokit: Octokit, username: string, includePrivate: boolean) {
   if (!includePrivate) {
     return octokit.paginate(octokit.repos.listForUser, {
-      username,
-      per_page: 100,
-      sort: "updated",
-      type: "owner",
+      username, per_page: 100, sort: "updated", type: "owner",
     });
   }
 
-  if (!token && !process.env.GITHUB_TOKEN) {
-    throw new Error(
-      "Sign in with GitHub or set GITHUB_TOKEN when include_private is true."
-    );
+  const { data: viewer } = await octokit.users.getAuthenticated();
+  if (viewer.login.toLowerCase() !== username.toLowerCase()) {
+    throw new ApiError("非公開リポジトリは連携した本人のみ集計できます。", 403);
   }
-
-  const repos = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
-    per_page: 100,
-    sort: "updated",
-    visibility: "all",
-    affiliation: "owner",
+  return octokit.paginate(octokit.repos.listForAuthenticatedUser, {
+    per_page: 100, sort: "updated", visibility: "all", affiliation: "owner",
   });
-
-  const normalizedUsername = username.toLowerCase();
-  return repos.filter((repo) => repo.owner.login.toLowerCase() === normalizedUsername);
 }
 
-async function mapLimit<T>(
-  items: T[],
-  limit: number,
-  worker: (item: T) => Promise<void>
-) {
+async function mapLimit<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
   let nextIndex = 0;
+  let failed = false;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (nextIndex < items.length) {
-      const item = items[nextIndex];
-      nextIndex += 1;
-      await worker(item);
+    while (!failed && nextIndex < items.length) {
+      const item = items[nextIndex++];
+      try {
+        await worker(item);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
     }
   });
-  await Promise.all(workers);
+  const results = await Promise.allSettled(workers);
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
 }
 
 export async function getLanguageStats(
-  username: string,
-  includePrivate: boolean,
-  token?: string
+  username: string, includePrivate: boolean, token?: string
 ): Promise<LanguageStats> {
-  const octokit = createOctokit(token);
-  const repos = await listRepositories(username, includePrivate, token);
-  const targets = repos.filter((repo) => !repo.fork && !repo.archived);
-  const langMap: Record<string, number> = {};
-
-  await mapLimit(targets, 8, async (repo) => {
-    const { data } = await octokit.repos.listLanguages({
-      owner: repo.owner.login,
-      repo: repo.name,
-    });
-
-    for (const [lang, bytes] of Object.entries(data)) {
-      if (EXCLUDED_LANGUAGES.has(lang)) continue;
-      langMap[lang] = (langMap[lang] ?? 0) + bytes;
+  if (!GITHUB_USERNAME_RE.test(username)) throw new ApiError("有効な GitHub ユーザー名を入力してください。", 400);
+  if (includePrivate && !token) {
+    // A deployment credential is never authorization to publish its owner's private data.
+    throw new ApiError("非公開リポジトリの集計には GitHub との連携が必要です。", 401);
+  }
+  const credential = includePrivate ? token : process.env.GITHUB_TOKEN || undefined;
+  return withAggregationSlot(async () => {
+    try {
+      return await fetchLanguageStats(username, includePrivate, credential);
+    } catch (error) {
+      // Public cards should still work when an optional deployment token has expired.
+      if (!includePrivate && credential && (error as { status?: number })?.status === 401) {
+        return fetchLanguageStats(username, false);
+      }
+      throw error;
     }
   });
-
-  const total = Object.values(langMap).reduce((sum, bytes) => sum + bytes, 0);
-  const languages =
-    total === 0
-      ? []
-      : Object.entries(langMap)
-          .map(([name, bytes]) => ({
-            name,
-            bytes,
-            percentage: bytes / total,
-          }))
-          .sort((a, b) => b.bytes - a.bytes);
-
-  return {
-    username,
-    includePrivate,
-    repositoryCount: targets.length,
-    languages,
-  };
 }
 
-export function customizeLanguageStats(
-  stats: LanguageStats,
-  options: LanguageStatsDisplayOptions
-): LanguageStats {
-  const hidden = new Set(
-    (options.hideLanguages ?? []).map((language) => language.toLowerCase())
-  );
-  const visibleLanguages = stats.languages.filter(
-    (language) => !hidden.has(language.name.toLowerCase())
-  );
-  const sortedLanguages = [...visibleLanguages].sort((a, b) => b.bytes - a.bytes);
-  const selectedLanguages =
-    options.count === "all"
-      ? sortedLanguages
-      : sortedLanguages.slice(0, options.count ?? 8);
-  const total = selectedLanguages.reduce((sum, language) => sum + language.bytes, 0);
-  const languages = selectedLanguages.map((language) => ({
-    ...language,
-    percentage: total === 0 ? 0 : language.bytes / total,
-  }));
-
-  return {
-    ...stats,
-    languages,
-  };
+async function fetchLanguageStats(username: string, includePrivate: boolean, token?: string): Promise<LanguageStats> {
+  const signal = AbortSignal.timeout(45_000);
+  const octokit = new Octokit({
+    auth: token,
+    request: { signal },
+  });
+  const appAuthorization = !includePrivate && !token ? getGitHubAppAuthorization() : undefined;
+  if (appAuthorization) {
+    octokit.hook.before("request", (options) => { options.headers.authorization = appAuthorization; });
+  }
+  try {
+    const repos = await listRepositories(octokit, username, includePrivate);
+    const normalizedUsername = username.toLowerCase();
+    const targets = repos.filter((repo) =>
+      !repo.fork && !repo.archived
+      && repo.owner.login.toLowerCase() === normalizedUsername
+      && (includePrivate || !repo.private)
+    );
+    const langMap = new Map<string, number>();
+    await mapLimit(targets, 8, async (repo) => {
+      const { data } = await octokit.repos.listLanguages({ owner: repo.owner.login, repo: repo.name });
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new ApiError("GitHub の言語データ形式を確認できませんでした。", 502);
+      for (const [language, bytes] of Object.entries(data)) {
+        if (!Number.isSafeInteger(bytes) || bytes < 0) throw new ApiError("GitHub の言語データ形式を確認できませんでした。", 502);
+        if (bytes > 0) langMap.set(language, (langMap.get(language) ?? 0) + bytes);
+      }
+    });
+    const total = [...langMap.values()].reduce((sum, bytes) => sum + bytes, 0);
+    const languages = [...langMap.entries()]
+      .map(([name, bytes]) => ({ name, bytes, percentage: total === 0 ? 0 : bytes / total }))
+      .sort((a, b) => b.bytes - a.bytes || a.name.localeCompare(b.name));
+    return { username, includePrivate, repositoryCount: targets.length, languages };
+  } catch (error) {
+    if (signal.aborted) throw new ApiError("GitHub からの応答がタイムアウトしました。再試行してください。", 504);
+    throw error;
+  }
 }

@@ -1,84 +1,57 @@
+import Link from "next/link";
+import GitHubConnection from "./components/GitHubConnection";
+import { isGitHubConfigured } from "./lib/githubOAuth";
 import LanguagePieChart from "./components/LanguagePieChart";
 import { auth, signIn, signOut } from "@/auth";
-import { createCardToken } from "./lib/cardToken";
 
-export default async function Home() {
-  const session = await auth();
+export default async function Home({ searchParams }: { searchParams: Promise<{ connection?: string }> }) {
+  const oauthConfigured = isGitHubConfigured();
+  const { connection } = await searchParams;
+  const session = oauthConfigured ? await auth() : null;
   const username = session?.user?.login ?? "";
-  let privateCardToken: string | undefined;
-  let privateCardError: string | undefined;
-
-  if (session?.accessToken && username) {
-    try {
-      privateCardToken = createCardToken({
-        accessToken: session.accessToken,
-        username,
-      });
-    } catch (error) {
-      privateCardError =
-        error instanceof Error ? error.message : "Failed to create private card URL.";
-    }
-  }
 
   return (
-    <main className="min-h-screen bg-[#f8fafd] px-4 py-5 text-[#202124] sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-6xl">
-        <header className="mb-8 flex flex-col gap-6 rounded-[28px] border border-[#e8eaed] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(60,64,67,0.12),0_1px_3px_rgba(60,64,67,0.08)] sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="grid h-12 w-12 shrink-0 grid-cols-2 gap-1 rounded-2xl bg-white p-2 shadow-[0_1px_3px_rgba(60,64,67,0.25)]" aria-hidden="true">
-              <span className="rounded-full bg-[#4285f4]" />
-              <span className="rounded-full bg-[#ea4335]" />
-              <span className="rounded-full bg-[#fbbc04]" />
-              <span className="rounded-full bg-[#34a853]" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-[#5f6368]">Profile README card builder</p>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#202124]">
-                GitHub Stats
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#5f6368]">
-                Generate a clean language usage card and embed it in your GitHub profile README.
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 justify-start lg:justify-end">
-            {session ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded-full bg-[#f1f3f4] px-4 py-2 text-sm font-medium text-[#3c4043]">
-                  @{username || session.user?.name}
-                </span>
-                <form
-                  action={async () => {
-                    "use server";
-                    await signOut();
-                  }}
-                >
-                  <button className="h-10 cursor-pointer rounded-full border border-[#dadce0] bg-white px-5 text-sm font-medium text-[#1a73e8] transition-colors duration-200 hover:bg-[#f8fafd] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/30">
-                    Sign out
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <form
-                action={async () => {
-                  "use server";
-                  await signIn("github");
-                }}
-              >
-                <button className="h-10 cursor-pointer rounded-full bg-[#1a73e8] px-5 text-sm font-medium text-white shadow-[0_1px_2px_rgba(26,115,232,0.25)] transition-colors duration-200 hover:bg-[#1765cc] focus:outline-none focus:ring-2 focus:ring-[#1a73e8]/30">
-                  Sign in with GitHub
-                </button>
-              </form>
-            )}
-          </div>
-        </header>
-        <LanguagePieChart
-          initialUsername={username}
-          isSignedIn={Boolean(session)}
-          privateCardToken={privateCardToken}
-          privateCardError={privateCardError}
-        />
+    <main className="site-shell">
+      <a className="skip-link" href="#builder">カード作成へ移動</a>
+      <header className="site-header">
+        <Link className="brand" href="/" aria-label="GitHub Stats ホーム">
+          <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true">
+            <g fill="none" strokeWidth="9" transform="rotate(-90 32 32)">
+              <circle cx="32" cy="32" r="21" stroke="#3178c6" strokeDasharray="59 140" />
+              <circle cx="32" cy="32" r="21" stroke="#3fb950" strokeDasharray="38 140" strokeDashoffset="-63" />
+              <circle cx="32" cy="32" r="21" stroke="#f1e05a" strokeDasharray="23 140" strokeDashoffset="-105" />
+            </g>
+          </svg>
+          <span>GitHub <strong>Stats</strong><small>YOUR CODE, YOUR STORY.</small></span>
+        </Link>
+        <nav className="header-links" aria-label="メインナビゲーション">
+          <a href="https://github.com/rui319420/github-stats" className="repository-link">GitHub で見る <span aria-hidden="true">↗</span></a>
+          {session ? <><span className="signed-user mono">@{username}</span><form action={async () => { "use server"; await signOut(); }}><button className="button secondary small" type="submit">ログアウト</button></form></> :
+            <a href="#connection" className="button secondary small">GitHub と連携</a>}
+        </nav>
+      </header>
+
+      <GitHubConnection session={session} configured={oauthConfigured} notice={connection} />
+
+      <div id="builder">
+        <h1 className="sr-only">GitHub 使用言語カードの作成</h1>
+        <LanguagePieChart initialUsername={username} isSignedIn={Boolean(session)}
+          oauthConfigured={oauthConfigured} privateCardToken={session?.privateCardToken}
+          privateCardError={session?.privateCardError} />
       </div>
+
+      <section id="privacy" className="privacy-section" aria-labelledby="privacy-title">
+        <div className="privacy-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></svg></div>
+        <div>
+          <h2 id="privacy-title">非公開の開発も、あなたの一部。</h2>
+          <p>GitHub と連携すると、自分が所有する非公開リポジトリも任意で集計できます。カードの共有URLを知る人には、言語・コード量・割合・リポジトリ数が公開されます。リポジトリ名とソースコードは表示しません。</p>
+          <details className="permission-details"><summary>連携前に、権限と公開範囲を確認</summary>
+            <p>OAuth の repo 権限には非公開リポジトリへの書き込み権限も含まれます。本アプリは読み取り API だけを使用します。カード用URLには暗号化した集計用トークンが含まれ、ログアウト後も有効です。失効させるには GitHub の連携アプリ設定で認可を取り消してください。</p>
+          </details>
+          {!session && (oauthConfigured ? <form action={async () => { "use server"; await signIn("github", { redirectTo: "/#builder" }); }}><button className="button secondary connect-button" type="submit">権限を確認して GitHub と連携 ↗</button></form> : <p className="small-muted">この環境では GitHub 連携が未設定です。公開カードはそのまま利用できます。</p>)}
+        </div>
+      </section>
+      <footer className="site-footer"><span>GitHub Stats <span className="footer-dot">·</span> コードで、自分を伝えよう。</span><a href="https://github.com/rui319420/github-stats#readme">使い方・ソースコード ↗</a></footer>
     </main>
   );
 }

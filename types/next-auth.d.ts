@@ -4,7 +4,8 @@ import type { DefaultSession } from "next-auth";
 
 declare module "next-auth" {
   interface Session {
-    accessToken?: string;
+    privateCardToken?: string;
+    privateCardError?: string;
     user?: DefaultSession["user"] & {
       login?: string;
     };

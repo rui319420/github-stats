@@ -1,8 +1,11 @@
 import NextAuth from "next-auth";
+import { isGitHubConfigured } from "./app/lib/githubOAuth";
 import GitHub from "next-auth/providers/github";
+import { createCardToken } from "./app/lib/cardToken";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [
+  pages: { error: "/auth/error" },
+  providers: isGitHubConfigured() ? [
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,
       clientSecret: process.env.AUTH_GITHUB_SECRET,
@@ -12,7 +15,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         },
       },
     }),
-  ],
+  ] : [],
   callbacks: {
     async jwt({ token, account, profile }) {
       if (account?.access_token) {
@@ -24,15 +27,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      if (typeof token.accessToken === "string") {
-        session.accessToken = token.accessToken;
-      }
-      if (
-        session.user &&
+      const username =
         typeof token.githubUsername === "string"
-      ) {
-        session.user.login = token.githubUsername;
+          ? token.githubUsername
+          : undefined;
+
+      if (session.user && username) {
+        session.user.login = username;
       }
+
+      if (
+        process.env.AUTH_SECRET &&
+        typeof token.accessToken === "string" &&
+        username
+      ) {
+        try {
+          session.privateCardToken = createCardToken({
+            accessToken: token.accessToken,
+            username,
+          });
+        } catch {
+          session.privateCardError = "非公開カードを作成できませんでした。再連携するか、管理者に設定を確認してください。";
+        }
+      }
+
       return session;
     },
   },

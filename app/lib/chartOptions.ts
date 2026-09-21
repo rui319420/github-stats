@@ -16,7 +16,7 @@ export interface CardTheme {
   muted: string;
 }
 
-export const CARD_TITLE = "Most Used Languages";
+export const CARD_TITLE = "使用言語";
 export const DEFAULT_LANGUAGE_COUNT: LanguageCountOption = "8";
 export const DEFAULT_THEME: CardThemeName = "github-dark";
 export const DEFAULT_BOUNDARY: BoundaryPosition = "top";
@@ -123,6 +123,7 @@ export function clamp(value: number, min: number, max: number) {
 }
 
 export function parseCardSize(value: string | number | null): number {
+  if (value === null || (typeof value === "string" && !value.trim())) return DEFAULT_CARD_SIZE;
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) return DEFAULT_CARD_SIZE;
   return Math.round(clamp(parsed, MIN_CARD_SIZE, MAX_CARD_SIZE));
