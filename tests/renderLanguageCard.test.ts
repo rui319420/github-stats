@@ -66,12 +66,14 @@ test("renderStatsSvg escapes user data and grows for a long legend", () => {
   const svg = renderStatsSvg(statsFrom(entries, "<alice&>"), baseOptions);
 
   assert.ok(svg.startsWith('<?xml version="1.0" encoding="UTF-8"?>'));
-  assert.match(svg, /<svg width="420" height="454" viewBox="0 0 420 454"/);
+  assert.match(svg, /<svg width="420" height="434" viewBox="0 0 420 434"/);
   assert.match(svg, /使用言語/);
   assert.match(svg, /&lt;alice&amp;&gt;/);
   assert.match(svg, /Language 0 &amp;/);
   assert.match(svg, /active-language-9/);
   assert.match(svg, /prefers-reduced-motion:\s*reduce/);
+  assert.doesNotMatch(svg, />\d+ リポジトリ ·/);
+  assert.doesNotMatch(svg, />コード量 \/ bytes</);
   assert.doesNotMatch(svg, /<script[ >]/);
 });
 
@@ -80,7 +82,7 @@ test("renderStatsSvg exposes a Japanese empty-data state", () => {
 
   assert.match(svg, /まだ言語データがありません/);
   assert.match(svg, /対象や非表示設定を確認してください/);
-  assert.match(svg, /viewBox="0 0 420 420"/);
+  assert.match(svg, /viewBox="0 0 420 390"/);
 });
 
 test("renderErrorSvg localizes and escapes safe error output", () => {
@@ -100,6 +102,7 @@ test("active language uses a colored center label, outer highlight, and bounded 
   assert.match(svg, /stroke-width="2"/);
   assert.match(svg, /textLength="70" lengthAdjust="spacingAndGlyphs"/);
   assert.match(svg, /textLength="108" lengthAdjust="spacingAndGlyphs"/);
+  assert.match(svg, /font-size="14" font-weight="800" class="numeric">100.0%/);
   assert.match(svg, /100.0%/);
   assert.doesNotMatch(svg, /NaN|Infinity|<script/);
 });

@@ -361,7 +361,7 @@ export default function LanguagePieChart({
             )}
             {includePrivate && (
               <p className="privacy-note">
-                共有URLを知る人は、言語・コード量・割合・リポジトリ数を閲覧できます。リポジトリ名やソースコードは表示しません。
+                共有URLを知る人は、言語・コード量・割合を閲覧できます。リポジトリ名やソースコードは表示しません。
               </p>
             )}
           </div>

@@ -128,5 +128,5 @@ export function createCardLayout(stats: LanguageStats, options: CardOptions): Ca
       callout: callout(start, angle),
     };
   });
-  return { height: Math.max(420, 334 + Math.ceil(slices.length / 2) * 24), slices };
+  return { height: Math.max(390, 314 + Math.ceil(slices.length / 2) * 24), slices };
 }

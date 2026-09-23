@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="420" height="420" viewBox="0 0 420 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="card-title card-description">
+<svg width="420" height="390" viewBox="0 0 420 390" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="card-title card-description">
   <title id="card-title">your-name の使用言語</title>
   <desc id="card-description">TypeScript 43.2%、Python 24.8%、JavaScript 17.6%、CSS 9.4%、HTML 5.0%。所有リポジトリのコード量に基づく割合。フォーク・アーカイブを除外。</desc>
   <style>text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', sans-serif; } .numeric { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric: tabular-nums; }</style>
@@ -40,7 +40,7 @@
       .active-language-0 { opacity: 1; }
     }
   </style>
-  <rect x="1" y="1" width="418" height="418" rx="18" fill="#0d1117" stroke="#30363d"/>
+  <rect x="1" y="1" width="418" height="388" rx="18" fill="#0d1117" stroke="#30363d"/>
   <text x="28" y="35" fill="#f0f6fc" font-size="17" font-weight="700">使用言語</text>
   <text x="392" y="35" text-anchor="end" fill="#8b949e" font-size="10" letter-spacing="1.5">GITHUB STATS</text>
   <text x="28" y="55" fill="#8b949e" font-size="12">@your-name</text>
@@ -95,7 +95,4 @@
       <circle cx="34" cy="357" r="4" fill="#e34c26"/>
       <text x="46" y="361" fill="#f0f6fc" font-size="11">HTML</text>
       <text x="196" y="361" text-anchor="end" fill="#8b949e" font-size="11" class="numeric">5.0%</text></g>
-  <line x1="28" y1="384" x2="392" y2="384" stroke="#30363d"/>
-  <text x="28" y="403" fill="#8b949e" font-size="10">24 リポジトリ · 公開リポジトリ</text>
-  <text x="392" y="403" text-anchor="end" fill="#8b949e" font-size="10">コード量 / bytes</text>
 </svg>

@@ -211,8 +211,8 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
             y={selected.callout.textY}
             textAnchor={selected.callout.anchor}
             fill={theme.foreground}
-            fontSize="12"
-            fontWeight="700"
+            fontSize="14"
+            fontWeight="800"
             className="numeric"
           >
             {formatPercent(selected.language.percentage)}
@@ -297,26 +297,6 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
           </g>
         );
       })}
-      <line
-        x1="28"
-        y1={height - 36}
-        x2="392"
-        y2={height - 36}
-        stroke={theme.border}
-      />
-      <text x="28" y={height - 17} fill={theme.muted} fontSize="10">
-        {stats.repositoryCount} リポジトリ ·{" "}
-        {stats.includePrivate ? "公開＋非公開" : "公開リポジトリ"}
-      </text>
-      <text
-        x="392"
-        y={height - 17}
-        textAnchor="end"
-        fill={theme.muted}
-        fontSize="10"
-      >
-        コード量 / bytes
-      </text>
     </svg>
   );
 }

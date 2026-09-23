@@ -25,5 +25,5 @@ test("single language and empty charts produce stable finite layouts", () => {
   const layout = createCardLayout(stats, options);
   assert.equal(layout.slices[0].color, "#3178c6");
   assert.doesNotMatch(layout.slices[0].path, /NaN|Infinity/);
-  assert.deepEqual(createCardLayout({ ...stats, languages: [] }, options), { height: 420, slices: [] });
+  assert.deepEqual(createCardLayout({ ...stats, languages: [] }, options), { height: 390, slices: [] });
 });

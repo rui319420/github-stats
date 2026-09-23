@@ -66,7 +66,6 @@ function animationStyles(total: number, options: CardOptions) {
 export function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
   const theme = CARD_THEMES[options.theme];
   const { height, slices } = createCardLayout(stats, options);
-  const scope = stats.includePrivate ? "公開＋非公開" : "公開リポジトリ";
   const description = stats.languages.length
     ? stats.languages.map((language) => `${language.name} ${formatPercent(language.percentage)}`).join("、")
     : "集計できる言語データがありません。";
@@ -84,7 +83,7 @@ export function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
       <text x="210" y="191" text-anchor="middle" fill="${color}" font-size="${fontSize}" font-weight="700"${nameFit}>${escapeXml(name)}</text>
       <path d="${callout.path}" stroke="${color}" stroke-width="2"/>
       <circle cx="${callout.x}" cy="${callout.y}" r="3" fill="${color}"/>
-      <text x="${callout.textX}" y="${callout.textY}" text-anchor="${callout.anchor}" fill="${theme.foreground}" font-size="12" font-weight="700" class="numeric">${formatPercent(language.percentage)}</text>
+      <text x="${callout.textX}" y="${callout.textY}" text-anchor="${callout.anchor}" fill="${theme.foreground}" font-size="14" font-weight="800" class="numeric">${formatPercent(language.percentage)}</text>
       <text x="${callout.textX}" y="${callout.textY + 18}" text-anchor="${callout.anchor}" fill="${theme.muted}" font-size="10" class="numeric"${bytesFit}>${bytes}</text>
     </g>`;
   }).join("");
@@ -107,9 +106,6 @@ export function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
   <text x="392" y="35" text-anchor="end" fill="${theme.muted}" font-size="10" letter-spacing="1.5">GITHUB STATS</text>
   <text x="28" y="55" fill="${theme.muted}" font-size="12">@${escapeXml(stats.username)}</text>
   ${slices.length ? `${donut}${active}${legend}` : `<circle cx="210" cy="183" r="72" stroke="${theme.border}" stroke-width="24"/><text x="210" y="180" text-anchor="middle" fill="${theme.foreground}" font-size="15">まだ言語データがありません</text><text x="210" y="203" text-anchor="middle" fill="${theme.muted}" font-size="11">対象や非表示設定を確認してください</text>`}
-  <line x1="28" y1="${height - 36}" x2="392" y2="${height - 36}" stroke="${theme.border}"/>
-  <text x="28" y="${height - 17}" fill="${theme.muted}" font-size="10">${stats.repositoryCount} リポジトリ · ${scope}</text>
-  <text x="392" y="${height - 17}" text-anchor="end" fill="${theme.muted}" font-size="10">コード量 / bytes</text>
 </svg>`;
 }
 
