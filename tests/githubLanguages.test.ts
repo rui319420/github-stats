@@ -72,7 +72,7 @@ test("top language selection keeps the remainder in an Other bucket", () => {
 
   assert.deepEqual(
     result.languages.map(({ name }) => name),
-    ["TypeScript", "Python", "Rust", "Go", "Ruby", "その他"]
+    ["TypeScript", "Python", "Rust", "Go", "Ruby", "Other"]
   );
   assert.equal(result.languages.at(-1)?.bytes, 500);
   assert.ok(Math.abs(result.languages.reduce((sum, language) => sum + language.percentage, 0) - 1) < 1e-12);
@@ -95,7 +95,7 @@ test("hiding a language happens before ranking and percentage recalculation", ()
 
   assert.deepEqual(
     result.languages.map(({ name }) => name),
-    ["TypeScript", "Rust", "Go", "Ruby", "Java", "その他"]
+    ["TypeScript", "Rust", "Go", "Ruby", "Java", "Other"]
   );
   assert.deepEqual(
     result.languages.map(({ bytes }) => bytes),

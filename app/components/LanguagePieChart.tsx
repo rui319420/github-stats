@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
+  CARD_TITLE,
   DEFAULT_BOUNDARY,
   DEFAULT_LANGUAGE_COUNT,
   DEFAULT_THEME,
@@ -68,6 +69,8 @@ export default function LanguagePieChart({
   const [boundary, setBoundary] = useState<BoundaryPosition>(DEFAULT_BOUNDARY);
   const [hidden, setHidden] = useState<string[]>([]);
   const [border, setBorder] = useState(true);
+  const [showTitle, setShowTitle] = useState(true);
+  const [showUsername, setShowUsername] = useState(true);
   const [transparent, setTransparent] = useState(false);
   const [githubColors, setGithubColors] = useState(true);
   const [animated, setAnimated] = useState(true);
@@ -107,6 +110,10 @@ export default function LanguagePieChart({
           .filter(Boolean),
       );
       setBorder(params.get("border") !== "false");
+      const titleParam = params.get("show_title");
+      const usernameParam = params.get("show_username");
+      setShowTitle(titleParam === null || ["true", "1", "yes", "on"].includes(titleParam.toLowerCase()));
+      setShowUsername(usernameParam === null || ["true", "1", "yes", "on"].includes(usernameParam.toLowerCase()));
       setAnimated(params.get("animated") !== "false");
       setGithubColors(params.get("github_colors") !== "false");
       setTransparent(params.get("transparent") === "true");
@@ -187,6 +194,8 @@ export default function LanguagePieChart({
       boundary,
       size: "420",
       border: String(border),
+      show_title: String(showTitle),
+      show_username: String(showUsername),
       animated: String(animated),
       interval: "2",
       github_colors: String(githubColors),
@@ -206,6 +215,8 @@ export default function LanguagePieChart({
     theme,
     boundary,
     border,
+    showTitle,
+    showUsername,
     animated,
     githubColors,
     hidden,
@@ -239,11 +250,12 @@ export default function LanguagePieChart({
   const imageReady = imageState.url === imageUrl && imageState.loaded;
   const imageFailed = imageState.url === imageUrl && imageState.error;
   const canExport = Boolean(imageUrl && imageReady && hasLanguages);
+  const imageAlt = showUsername ? `${scan?.username} の GitHub 使用言語` : "GitHub 使用言語";
   const embedCode = !canExport
     ? ""
     : format === "html"
-      ? `<img src="${imageUrl.replaceAll("&", "&amp;")}" alt="${scan?.username} の GitHub 使用言語" />`
-      : `[![${scan?.username} の GitHub 使用言語](${imageUrl})](${origin})`;
+      ? `<img src="${imageUrl.replaceAll("&", "&amp;")}" alt="${imageAlt}" />`
+      : `[![${imageAlt}](${imageUrl})](${origin})`;
   const localOrigin =
     origin &&
     (new URL(origin).protocol !== "https:" ||
@@ -404,9 +416,25 @@ export default function LanguagePieChart({
           </div>
           <p className="field-help">
             「GitHub ライト」は白背景、「自動」は閲覧環境に合わせて配色を切り替えます。
-            表示数を超える言語は「その他」にまとめ、全体の割合を保ちます。
+            表示数を超える言語は「Other」にまとめ、全体の割合を保ちます。
           </p>
           <div className="switch-grid">
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={showTitle}
+                onChange={(event) => setShowTitle(event.target.checked)}
+              />
+              「{CARD_TITLE}」を表示
+            </label>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={showUsername}
+                onChange={(event) => setShowUsername(event.target.checked)}
+              />
+              ユーザーIDを表示
+            </label>
             <label className="check-row">
               <input
                 type="checkbox"
@@ -564,6 +592,8 @@ export default function LanguagePieChart({
                     githubColors,
                     interval: 2,
                     size: 420,
+                    showTitle,
+                    showUsername,
                     theme,
                     transparent,
                   }}

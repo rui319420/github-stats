@@ -96,7 +96,7 @@ GitHub の [Languages API](https://docs.github.com/en/rest/repos/repos#list-repo
 - フォークとアーカイブ済みリポジトリは除外します。
 - 言語の固定除外はありません。HTML、CSS、ShaderLab、Jupyter Notebook も集計できます。
 - `hide` で指定した言語を除外してから割合を再計算します。
-- 表示数を超える言語は「その他」にまとめ、全体に対する割合を保ちます。
+- 表示数を超える言語は「Other」にまとめ、全体に対する割合を保ちます。
 - 空のリポジトリや GitHub 側で言語未判定のリポジトリには、言語データがありません。
 - 一部のリポジトリだけ取得できた場合に、不完全な集計を成功として返しません。
 
@@ -114,7 +114,7 @@ JSON API は `username`、`includePrivate`、`repositoryCount`、`languages` を
 | `username` | GitHub ユーザー名 | 公開カードの対象 |
 | `include_private` | `false` | `true`、`1`、`yes`、`on` で非公開を含む。本人認証か有効なカードトークンが必須 |
 | `card_token` | アプリから発行 | 非公開を含む共有カードの閲覧権限 |
-| `count` | `5`、`8`（既定）、`10`、`all` | 上位言語数。残りは「その他」 |
+| `count` | `5`、`8`（既定）、`10`、`all` | 上位言語数。残りは「Other」 |
 | `hide` | カンマ区切り | 除外言語。例：`HTML,CSS` |
 | `theme` | `github-dark`（既定）、`github-light`、`dark`、`light`、`auto`、`transparent` | カードの配色。`auto` は閲覧環境のライト／ダーク設定に追従 |
 | `boundary` | `top`（既定）、`right`、`bottom`、`left` | グラフの開始位置 |
@@ -122,6 +122,8 @@ JSON API は `username`、`includePrivate`、`repositoryCount`、`languages` を
 | `transparent` | `false` | 背景を透過 |
 | `github_colors` | `true` | GitHub の言語色を使用。未定義言語は名前から色を生成 |
 | `border` | `true` | 枠線を表示 |
+| `show_title` | `true` | `false` で「Language Usage」の見出しを非表示 |
+| `show_username` | `true` | `false` でカードのユーザーIDを非表示 |
 | `animated` | `true` | 中央の言語を順番に表示 |
 | `interval` | 1〜10秒、既定2秒 | アニメーションの切り替え間隔 |
 

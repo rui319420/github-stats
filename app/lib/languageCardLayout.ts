@@ -1,5 +1,6 @@
 import {
   FALLBACK_LANGUAGE_PALETTE,
+  OTHER_LANGUAGE_LABEL,
   SVG_BOUNDARY_ANGLES,
   clamp,
   type BoundaryPosition,
@@ -15,6 +16,8 @@ export interface CardOptions {
   githubColors: boolean;
   interval: number;
   size: number;
+  showTitle: boolean;
+  showUsername: boolean;
   theme: CardThemeName;
   transparent: boolean;
 }
@@ -82,7 +85,7 @@ function segment(start: number, end: number, inner: number, outer: number) {
 }
 
 function languageColor(name: string, index: number, githubColors: boolean) {
-  if (name === "その他") return "#8b949e";
+  if (name === OTHER_LANGUAGE_LABEL) return "#8b949e";
   return githubColors
     ? GITHUB_LANGUAGE_COLORS[name] ?? getRandomColor(name)
     : FALLBACK_LANGUAGE_PALETTE[index % FALLBACK_LANGUAGE_PALETTE.length];
