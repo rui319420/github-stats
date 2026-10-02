@@ -25,7 +25,7 @@ test("single language and empty charts produce stable finite layouts", () => {
   const layout = createCardLayout(stats, options);
   assert.equal(layout.slices[0].color, "#3178c6");
   assert.doesNotMatch(layout.slices[0].path, /NaN|Infinity/);
-  assert.deepEqual(createCardLayout({ ...stats, languages: [] }, options), { height: 390, slices: [] });
+  assert.deepEqual(createCardLayout({ ...stats, languages: [] }, options), { height: 390, contentOffsetY: 0, slices: [] });
 });
 
 test("the Other bucket keeps a neutral color for both language palettes", () => {
@@ -34,5 +34,30 @@ test("the Other bucket keeps a neutral color for both language palettes", () => 
   for (const githubColors of [true, false]) {
     const options = { ...parseCardOptions(new URLSearchParams()), githubColors };
     assert.equal(createCardLayout(stats, options).slices[0].color, "#8b949e");
+  }
+});
+
+test("hidden header rows compact short, empty, and long cards without clipping content", () => {
+  for (const count of [0, 1, 10, 72]) {
+    const stats = { username: "alice", includePrivate: false, repositoryCount: 1,
+      languages: Array.from({ length: count }, (_, index) => ({ name: `Language ${index}`, bytes: 1, percentage: 1 / count })) };
+    const defaults = parseCardOptions(new URLSearchParams());
+    const fullHeight = createCardLayout(stats, defaults).height;
+    for (const showTitle of [true, false]) {
+      for (const showUsername of [true, false]) {
+        for (const boundary of ["top", "right", "bottom", "left"] as const) {
+          const layout = createCardLayout(stats, { ...defaults, showTitle, showUsername, boundary });
+          const savedSpace = (showTitle ? 0 : 20) + (showUsername ? 0 : 20);
+          assert.equal(layout.height, fullHeight - savedSpace);
+          assert.equal(layout.contentOffsetY, savedSpace ? -savedSpace : 0);
+          for (const slice of layout.slices) {
+            assert.ok(slice.callout.textY + layout.contentOffsetY - 14 > 1);
+            assert.ok(slice.callout.textY + layout.contentOffsetY + 18 < layout.height - 1);
+            const legendBottom = 313 + Math.floor(slice.index / 2) * 24 + 7 + layout.contentOffsetY;
+            assert.ok(legendBottom < layout.height - 1);
+          }
+        }
+      }
+    }
   }
 });

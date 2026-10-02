@@ -73,7 +73,9 @@ test("card title and username visibility are independent for populated and empty
         const svg = renderStatsSvg(stats, options);
         assert.equal(/<text[^>]*>Language Usage<\/text>/.test(svg), showTitle);
         assert.equal(/<text[^>]*>@alice<\/text>/.test(svg), showUsername);
-        assert.match(svg, /viewBox="0 0 420 390"/);
+        const hiddenHeight = (showTitle ? 0 : 20) + (showUsername ? 0 : 20);
+        assert.ok(svg.includes(`viewBox="0 0 420 ${390 - hiddenHeight}"`));
+        assert.ok(svg.includes(`transform="translate(0 ${hiddenHeight ? -hiddenHeight : 0})"`));
         if (!showUsername) assert.doesNotMatch(svg, /alice/);
         if (showUsername && !showTitle) assert.match(svg, /<text x="28" y="35"[^>]*>@alice<\/text>/);
       }

@@ -42,10 +42,12 @@ export interface CardLayoutSlice {
 
 export interface CardLayout {
   height: number;
+  contentOffsetY: number;
   slices: CardLayoutSlice[];
 }
 
 const CARD_WIDTH = 420;
+const HEADER_LINE_HEIGHT = 20;
 const CENTER_X = CARD_WIDTH / 2;
 const CENTER_Y = 183;
 const DONUT_INNER_RADIUS = 58;
@@ -118,6 +120,8 @@ function callout(start: number, end: number): CardCallout {
 }
 
 export function createCardLayout(stats: LanguageStats, options: CardOptions): CardLayout {
+  const contentOffsetY = (options.showTitle ? 0 : -HEADER_LINE_HEIGHT)
+    + (options.showUsername ? 0 : -HEADER_LINE_HEIGHT);
   let angle = SVG_BOUNDARY_ANGLES[options.boundary];
   const slices = stats.languages.map((language, index) => {
     const start = angle;
@@ -131,5 +135,9 @@ export function createCardLayout(stats: LanguageStats, options: CardOptions): Ca
       callout: callout(start, angle),
     };
   });
-  return { height: Math.max(390, 314 + Math.ceil(slices.length / 2) * 24), slices };
+  return {
+    height: Math.max(390, 314 + Math.ceil(slices.length / 2) * 24) + contentOffsetY,
+    contentOffsetY,
+    slices,
+  };
 }

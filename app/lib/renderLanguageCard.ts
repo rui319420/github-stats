@@ -68,7 +68,7 @@ function animationStyles(total: number, options: CardOptions) {
 
 export function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
   const theme = CARD_THEMES[options.theme];
-  const { height, slices } = createCardLayout(stats, options);
+  const { height, contentOffsetY, slices } = createCardLayout(stats, options);
   const description = stats.languages.length
     ? stats.languages.map((language) => `${language.name} ${formatPercent(language.percentage)}`).join("、")
     : "集計できる言語データがありません。";
@@ -108,7 +108,9 @@ export function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
   <rect x="1" y="1" width="418" height="${height - 2}" rx="18" fill="${options.transparent ? "none" : theme.background}" stroke="${options.border ? theme.border : "none"}"/>
   ${options.showTitle ? `<text x="28" y="35" fill="${theme.foreground}" font-size="17" font-weight="700">${CARD_TITLE}</text>` : ""}
   ${options.showUsername ? `<text x="28" y="${options.showTitle ? 55 : 35}" fill="${theme.muted}" font-size="12">@${escapeXml(stats.username)}</text>` : ""}
-  ${slices.length ? `${donut}${active}${legend}` : `<circle cx="210" cy="183" r="72" stroke="${theme.border}" stroke-width="24"/><text x="210" y="180" text-anchor="middle" fill="${theme.foreground}" font-size="15">まだ言語データがありません</text><text x="210" y="203" text-anchor="middle" fill="${theme.muted}" font-size="11">対象や非表示設定を確認してください</text>`}
+  <g transform="translate(0 ${contentOffsetY})">
+    ${slices.length ? `${donut}${active}${legend}` : `<circle cx="210" cy="183" r="72" stroke="${theme.border}" stroke-width="24"/><text x="210" y="180" text-anchor="middle" fill="${theme.foreground}" font-size="15">まだ言語データがありません</text><text x="210" y="203" text-anchor="middle" fill="${theme.muted}" font-size="11">対象や非表示設定を確認してください</text>`}
+  </g>
 </svg>`;
 }
 
