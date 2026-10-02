@@ -140,7 +140,7 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
       data-paused={paused}
       data-card-theme={options.theme}
     >
-      <title id={titleId}>{`${stats.username} の使用言語`}</title>
+      <title id={titleId}>{`${options.showUsername ? `${stats.username} — ` : ""}${CARD_TITLE}`}</title>
       <desc id={descriptionId}>
         言語の円弧や凡例にカーソルを合わせると表示を固定し、外すとそこから順番に再開します。Tabキーでも言語を選べます。
       </desc>
@@ -158,18 +158,22 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
         }
         stroke={options.border ? theme.border : "none"}
       />
-      <text
-        x="28"
-        y="35"
-        fill={theme.foreground}
-        fontSize="17"
-        fontWeight="700"
-      >
-        {CARD_TITLE}
-      </text>
-      <text x="28" y="55" fill={theme.muted} fontSize="12">
-        @{stats.username}
-      </text>
+      {options.showTitle && (
+        <text
+          x="28"
+          y="35"
+          fill={theme.foreground}
+          fontSize="17"
+          fontWeight="700"
+        >
+          {CARD_TITLE}
+        </text>
+      )}
+      {options.showUsername && (
+        <text x="28" y={options.showTitle ? 55 : 35} fill={theme.muted} fontSize="12">
+          @{stats.username}
+        </text>
+      )}
       {slices.map((slice) => (
         <g
           key={slice.language.name}

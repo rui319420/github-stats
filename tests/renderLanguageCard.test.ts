@@ -10,6 +10,8 @@ const baseOptions: CardOptions = {
   githubColors: true,
   interval: 2,
   size: 420,
+  showTitle: true,
+  showUsername: true,
   theme: "github-dark",
   transparent: false,
 };
@@ -49,6 +51,8 @@ test("parseCardOptions reads and clamps SVG query parameters", () => {
     githubColors: false,
     interval: 10,
     size: 720,
+    showTitle: true,
+    showUsername: true,
     theme: "light",
     transparent: true,
   });
@@ -56,6 +60,25 @@ test("parseCardOptions reads and clamps SVG query parameters", () => {
 
 test("parseCardOptions supplies safe defaults for omitted values", () => {
   assert.deepEqual(parseCardOptions(new URLSearchParams()), baseOptions);
+});
+
+test("card title and username visibility are independent for populated and empty cards", () => {
+  for (const showTitle of [true, false]) {
+    for (const showUsername of [true, false]) {
+      const options = parseCardOptions(new URLSearchParams({
+        show_title: String(showTitle),
+        show_username: String(showUsername),
+      }));
+      for (const stats of [statsFrom([["TypeScript", 100]]), statsFrom([])]) {
+        const svg = renderStatsSvg(stats, options);
+        assert.equal(/<text[^>]*>Language Usage<\/text>/.test(svg), showTitle);
+        assert.equal(/<text[^>]*>@alice<\/text>/.test(svg), showUsername);
+        assert.match(svg, /viewBox="0 0 420 390"/);
+        if (!showUsername) assert.doesNotMatch(svg, /alice/);
+        if (showUsername && !showTitle) assert.match(svg, /<text x="28" y="35"[^>]*>@alice<\/text>/);
+      }
+    }
+  }
 });
 
 test("renderStatsSvg escapes user data and grows for a long legend", () => {
@@ -67,7 +90,7 @@ test("renderStatsSvg escapes user data and grows for a long legend", () => {
 
   assert.ok(svg.startsWith('<?xml version="1.0" encoding="UTF-8"?>'));
   assert.match(svg, /<svg width="420" height="434" viewBox="0 0 420 434"/);
-  assert.match(svg, /使用言語/);
+  assert.match(svg, /Language Usage/);
   assert.match(svg, /&lt;alice&amp;&gt;/);
   assert.match(svg, /Language 0 &amp;/);
   assert.match(svg, /active-language-9/);

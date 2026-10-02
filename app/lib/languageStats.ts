@@ -1,4 +1,4 @@
-import { DEFAULT_LANGUAGE_COUNT } from "./chartOptions";
+import { DEFAULT_LANGUAGE_COUNT, OTHER_LANGUAGE_LABEL } from "./chartOptions";
 
 export interface LanguageData {
   name: string;
@@ -32,6 +32,6 @@ export function customizeLanguageStats(
     ...language, percentage: total === 0 ? 0 : language.bytes / total,
   }));
   const otherBytes = visible.slice(count).reduce((sum, language) => sum + language.bytes, 0);
-  if (otherBytes > 0) languages.push({ name: "その他", bytes: otherBytes, percentage: otherBytes / total });
+  if (otherBytes > 0) languages.push({ name: OTHER_LANGUAGE_LABEL, bytes: otherBytes, percentage: otherBytes / total });
   return { ...stats, languages };
 }

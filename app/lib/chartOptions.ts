@@ -17,7 +17,8 @@ export interface CardTheme {
   muted: string;
 }
 
-export const CARD_TITLE = "使用言語";
+export const CARD_TITLE = "Language Usage";
+export const OTHER_LANGUAGE_LABEL = "Other";
 export const DEFAULT_LANGUAGE_COUNT: LanguageCountOption = "8";
 export const DEFAULT_THEME: CardThemeName = "github-dark";
 export const DEFAULT_BOUNDARY: BoundaryPosition = "top";

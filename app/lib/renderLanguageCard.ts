@@ -36,6 +36,8 @@ export function parseCardOptions(params: URLSearchParams): CardOptions {
     githubColors: optionalBoolean(params.get("github_colors"), true),
     interval: Number.isFinite(interval) ? clamp(interval, 1, 10) : DEFAULT_ANIMATION_INTERVAL_SECONDS,
     size: parseCardSize(params.get("size")),
+    showTitle: optionalBoolean(params.get("show_title"), true),
+    showUsername: optionalBoolean(params.get("show_username"), true),
     theme,
     transparent: theme === "transparent" || parseBooleanParam(params.get("transparent")),
   };
@@ -98,14 +100,14 @@ export function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${options.size}" height="${Math.round(options.size * height / 420)}" viewBox="0 0 420 ${height}" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="card-title card-description" data-card-theme="${options.theme}">
-  <title id="card-title">${escapeXml(stats.username)} の使用言語</title>
+  <title id="card-title">${options.showUsername ? `${escapeXml(stats.username)} — ` : ""}${CARD_TITLE}</title>
   <desc id="card-description">${escapeXml(description)}。所有リポジトリのコード量に基づく割合。フォーク・アーカイブを除外。</desc>
   <style>text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', sans-serif; } .numeric { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric: tabular-nums; }</style>
   ${animationStyles(slices.length, options)}
   <style>${cardThemeStyles(options.theme, slices.map((slice) => slice.color))}</style>
   <rect x="1" y="1" width="418" height="${height - 2}" rx="18" fill="${options.transparent ? "none" : theme.background}" stroke="${options.border ? theme.border : "none"}"/>
-  <text x="28" y="35" fill="${theme.foreground}" font-size="17" font-weight="700">${CARD_TITLE}</text>
-  <text x="28" y="55" fill="${theme.muted}" font-size="12">@${escapeXml(stats.username)}</text>
+  ${options.showTitle ? `<text x="28" y="35" fill="${theme.foreground}" font-size="17" font-weight="700">${CARD_TITLE}</text>` : ""}
+  ${options.showUsername ? `<text x="28" y="${options.showTitle ? 55 : 35}" fill="${theme.muted}" font-size="12">@${escapeXml(stats.username)}</text>` : ""}
   ${slices.length ? `${donut}${active}${legend}` : `<circle cx="210" cy="183" r="72" stroke="${theme.border}" stroke-width="24"/><text x="210" y="180" text-anchor="middle" fill="${theme.foreground}" font-size="15">まだ言語データがありません</text><text x="210" y="203" text-anchor="middle" fill="${theme.muted}" font-size="11">対象や非表示設定を確認してください</text>`}
 </svg>`;
 }

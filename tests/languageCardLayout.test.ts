@@ -27,3 +27,12 @@ test("single language and empty charts produce stable finite layouts", () => {
   assert.doesNotMatch(layout.slices[0].path, /NaN|Infinity/);
   assert.deepEqual(createCardLayout({ ...stats, languages: [] }, options), { height: 390, slices: [] });
 });
+
+test("the Other bucket keeps a neutral color for both language palettes", () => {
+  const stats = { username: "alice", includePrivate: false, repositoryCount: 1,
+    languages: [{ name: "Other", bytes: 100, percentage: 1 }] };
+  for (const githubColors of [true, false]) {
+    const options = { ...parseCardOptions(new URLSearchParams()), githubColors };
+    assert.equal(createCardLayout(stats, options).slices[0].color, "#8b949e");
+  }
+});
