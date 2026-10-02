@@ -18,7 +18,7 @@ interface Props {
 }
 
 export default function InteractiveLanguageCard({ stats, options }: Props) {
-  const { height, slices } = createCardLayout(stats, options);
+  const { height, contentOffsetY, slices } = createCardLayout(stats, options);
   const theme = CARD_THEMES[options.theme];
   const titleId = useId();
   const descriptionId = useId();
@@ -178,6 +178,7 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
         <g
           key={slice.language.name}
           className="language-sector"
+          transform={`translate(0 ${contentOffsetY})`}
           data-language-index={slice.index}
           {...interactionProps(slice.index)}
         >
@@ -185,7 +186,7 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
         </g>
       ))}
       {selected ? (
-        <g className="language-active" pointerEvents="none" aria-hidden="true">
+        <g className="language-active" transform={`translate(0 ${contentOffsetY})`} pointerEvents="none" aria-hidden="true">
           <path d={selected.highlightPath} fill={selected.color} />
           <text
             className="active-language-name"
@@ -240,7 +241,7 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
           </text>
         </g>
       ) : (
-        <g>
+        <g transform={`translate(0 ${contentOffsetY})`}>
           <circle
             cx="210"
             cy="183"
@@ -275,6 +276,7 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
           <g
             key={slice.language.name}
             className="language-legend"
+            transform={`translate(0 ${contentOffsetY})`}
             data-language-index={slice.index}
             {...interactionProps(slice.index)}
           >
