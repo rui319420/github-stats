@@ -11,6 +11,7 @@ import {
   truncateLabel,
 } from "./chartOptions";
 import { createCardLayout, type CardOptions } from "./languageCardLayout";
+import { cardThemeStyles, languageTextColor } from "./cardTheme";
 export type { CardOptions } from "./languageCardLayout";
 import { parseBooleanParam, type LanguageStats } from "./githubLanguages";
 
@@ -80,7 +81,7 @@ export function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
     const bytesFit = bytes.length > 11 ? ' textLength="70" lengthAdjust="spacingAndGlyphs"' : "";
     return `<g class="active-language active-language-${index}" opacity="${index === 0 ? 1 : 0}">
       <path d="${highlightPath}" fill="${color}"/>
-      <text x="210" y="191" text-anchor="middle" fill="${color}" font-size="${fontSize}" font-weight="700"${nameFit}>${escapeXml(name)}</text>
+      <text x="210" y="191" text-anchor="middle" fill="${languageTextColor(color, options.theme, index)}" font-size="${fontSize}" font-weight="700"${nameFit}>${escapeXml(name)}</text>
       <path d="${callout.path}" stroke="${color}" stroke-width="2"/>
       <circle cx="${callout.x}" cy="${callout.y}" r="3" fill="${color}"/>
       <text x="${callout.textX}" y="${callout.textY}" text-anchor="${callout.anchor}" fill="${theme.foreground}" font-size="14" font-weight="800" class="numeric">${formatPercent(language.percentage)}</text>
@@ -96,30 +97,34 @@ export function renderStatsSvg(stats: LanguageStats, options: CardOptions) {
       <text x="${x + 166}" y="${y}" text-anchor="end" fill="${theme.muted}" font-size="11" class="numeric">${formatPercent(language.percentage)}</text></g>`;
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${options.size}" height="${Math.round(options.size * height / 420)}" viewBox="0 0 420 ${height}" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="card-title card-description">
+<svg width="${options.size}" height="${Math.round(options.size * height / 420)}" viewBox="0 0 420 ${height}" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="card-title card-description" data-card-theme="${options.theme}">
   <title id="card-title">${escapeXml(stats.username)} の使用言語</title>
   <desc id="card-description">${escapeXml(description)}。所有リポジトリのコード量に基づく割合。フォーク・アーカイブを除外。</desc>
   <style>text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', sans-serif; } .numeric { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric: tabular-nums; }</style>
   ${animationStyles(slices.length, options)}
+  <style>${cardThemeStyles(options.theme, slices.map((slice) => slice.color))}</style>
   <rect x="1" y="1" width="418" height="${height - 2}" rx="18" fill="${options.transparent ? "none" : theme.background}" stroke="${options.border ? theme.border : "none"}"/>
   <text x="28" y="35" fill="${theme.foreground}" font-size="17" font-weight="700">${CARD_TITLE}</text>
-  <text x="392" y="35" text-anchor="end" fill="${theme.muted}" font-size="10" letter-spacing="1.5">GITHUB STATS</text>
   <text x="28" y="55" fill="${theme.muted}" font-size="12">@${escapeXml(stats.username)}</text>
   ${slices.length ? `${donut}${active}${legend}` : `<circle cx="210" cy="183" r="72" stroke="${theme.border}" stroke-width="24"/><text x="210" y="180" text-anchor="middle" fill="${theme.foreground}" font-size="15">まだ言語データがありません</text><text x="210" y="203" text-anchor="middle" fill="${theme.muted}" font-size="11">対象や非表示設定を確認してください</text>`}
 </svg>`;
 }
 
-export function renderErrorSvg(message: string) {
+export function renderErrorSvg(message: string, options = parseCardOptions(new URLSearchParams())) {
+  const theme = CARD_THEMES[options.theme];
+  const errorColor = options.theme === "auto" ? "var(--card-error, #cf222e)"
+    : options.theme === "light" || options.theme === "github-light" ? "#cf222e" : "#ff7b72";
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="420" height="180" viewBox="0 0 420 180" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="error-title error-description">
+<svg width="${options.size}" height="${Math.round(options.size * 180 / 420)}" viewBox="0 0 420 180" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="error-title error-description" data-card-theme="${options.theme}">
   <title id="error-title">GitHub Stats — 読み込みエラー</title>
   <desc id="error-description">${escapeXml(message)}</desc>
-  <rect x="1" y="1" width="418" height="178" rx="18" fill="#0d1117" stroke="#30363d"/>
+  <style>${cardThemeStyles(options.theme)}</style>
+  <rect x="1" y="1" width="418" height="178" rx="18" fill="${options.transparent ? "none" : theme.background}" stroke="${options.border ? theme.border : "none"}"/>
   <g font-family="sans-serif">
-    <text x="24" y="44" fill="#f0f6fc" font-size="18" font-weight="700">GitHub Stats</text>
-    <text x="24" y="80" fill="#ff7b72" font-size="14">カードを読み込めませんでした</text>
-    <text x="24" y="110" fill="#c9d1d9" font-size="11">${escapeXml(truncateLabel(message, 32))}</text>
-    <text x="24" y="145" fill="#8b949e" font-size="11">アプリで設定を確認し、もう一度お試しください。</text>
+    <text x="24" y="44" fill="${theme.foreground}" font-size="18" font-weight="700">GitHub Stats</text>
+    <text x="24" y="80" fill="${errorColor}" font-size="14">カードを読み込めませんでした</text>
+    <text x="24" y="110" fill="${theme.foreground}" font-size="11">${escapeXml(truncateLabel(message, 32))}</text>
+    <text x="24" y="145" fill="${theme.muted}" font-size="11">アプリで設定を確認し、もう一度お試しください。</text>
   </g>
 </svg>`;
 }

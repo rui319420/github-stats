@@ -85,6 +85,41 @@ test("renderStatsSvg exposes a Japanese empty-data state", () => {
   assert.match(svg, /viewBox="0 0 420 390"/);
 });
 
+test("light cards use readable language labels while retaining GitHub chart colors", () => {
+  const options = parseCardOptions(new URLSearchParams("theme=github-light"));
+  const svg = renderStatsSvg(statsFrom([["JavaScript", 100]]), options);
+  assert.match(svg, /fill="#ffffff" stroke="#d0d7de"/);
+  assert.match(svg, /fill="#24292f"/);
+  assert.match(svg, /fill="#57606a"/);
+  assert.match(svg, /fill="#f1e05a"><title>JavaScript/);
+  assert.doesNotMatch(svg, /text-anchor="middle" fill="#f1e05a"/);
+});
+
+test("automatic theme includes both palettes for populated, empty, and error cards", () => {
+  const options = parseCardOptions(new URLSearchParams("theme=auto"));
+  assert.equal(options.theme, "auto");
+  for (const svg of [
+    renderStatsSvg(statsFrom([["JavaScript", 100]]), options),
+    renderStatsSvg(statsFrom([]), options),
+    renderErrorSvg("エラー", options),
+  ]) {
+    assert.match(svg, /data-card-theme="auto"/);
+    assert.match(svg, /@media \(prefers-color-scheme: dark\)/);
+    assert.match(svg, /--card-background: #ffffff/);
+    assert.match(svg, /--card-background: #0d1117/);
+    assert.match(svg, /fill="var\(--card-foreground/);
+  }
+});
+
+test("error cards respect light, transparent, border, and size options", () => {
+  const light = renderErrorSvg("エラー", parseCardOptions(new URLSearchParams("theme=github-light")));
+  assert.match(light, /fill="#ffffff" stroke="#d0d7de"/);
+  assert.match(light, /fill="#cf222e"/);
+  const transparent = renderErrorSvg("エラー", parseCardOptions(new URLSearchParams("theme=light&transparent=true&border=false&size=600")));
+  assert.match(transparent, /<svg width="600" height="257"/);
+  assert.match(transparent, /fill="none" stroke="none"/);
+});
+
 test("renderErrorSvg localizes and escapes safe error output", () => {
   const svg = renderErrorSvg("<script>alert(1)</script>");
 
