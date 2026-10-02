@@ -9,6 +9,7 @@ import {
   truncateLabel,
 } from "../lib/chartOptions";
 import { createCardLayout, type CardOptions } from "../lib/languageCardLayout";
+import { cardThemeStyles, languageTextColor } from "../lib/cardTheme";
 import type { LanguageStats } from "../lib/languageStats";
 
 interface Props {
@@ -137,11 +138,13 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
       aria-describedby={descriptionId}
       data-active-index={selectedIndex}
       data-paused={paused}
+      data-card-theme={options.theme}
     >
       <title id={titleId}>{`${stats.username} の使用言語`}</title>
       <desc id={descriptionId}>
         言語の円弧や凡例にカーソルを合わせると表示を固定し、外すとそこから順番に再開します。Tabキーでも言語を選べます。
       </desc>
+      <style>{cardThemeStyles(options.theme, slices.map((slice) => slice.color))}</style>
       <rect
         x="1"
         y="1"
@@ -185,7 +188,7 @@ export default function InteractiveLanguageCard({ stats, options }: Props) {
             x="210"
             y="191"
             textAnchor="middle"
-            fill={selected.color}
+            fill={languageTextColor(selected.color, options.theme, selected.index)}
             fontSize={nameFontSize}
             textLength={
               selectedName.length * nameFontSize * 0.6 > 108 ? 108 : undefined

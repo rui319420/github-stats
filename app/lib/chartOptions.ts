@@ -1,4 +1,5 @@
 export type CardThemeName =
+  | "auto"
   | "dark"
   | "light"
   | "transparent"
@@ -39,6 +40,12 @@ export const FALLBACK_LANGUAGE_PALETTE = [
 ];
 
 export const CARD_THEMES: Record<CardThemeName, CardTheme> = {
+  auto: {
+    background: "var(--card-background, #ffffff)",
+    border: "var(--card-border, #d0d7de)",
+    foreground: "var(--card-foreground, #24292f)",
+    muted: "var(--card-muted, #57606a)",
+  },
   dark: {
     background: "#111827",
     border: "#374151",
@@ -87,6 +94,7 @@ export const RECHARTS_BOUNDARY_ANGLES: Record<BoundaryPosition, number> = {
 
 export function isCardThemeName(value: string | null): value is CardThemeName {
   return (
+    value === "auto" ||
     value === "dark" ||
     value === "light" ||
     value === "transparent" ||

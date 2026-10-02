@@ -38,6 +38,7 @@ interface Scan {
 type Status = "idle" | "loading" | "ready" | "error";
 
 const themes: [CardThemeName, string][] = [
+  ["auto", "自動（ライト／ダーク）"],
   ["github-dark", "GitHub ダーク"],
   ["github-light", "GitHub ライト"],
   ["dark", "ミッドナイト"],
@@ -402,6 +403,7 @@ export default function LanguagePieChart({
             </label>
           </div>
           <p className="field-help">
+            「GitHub ライト」は白背景、「自動」は閲覧環境に合わせて配色を切り替えます。
             表示数を超える言語は「その他」にまとめ、全体の割合を保ちます。
           </p>
           <div className="switch-grid">
@@ -538,6 +540,7 @@ export default function LanguagePieChart({
           </div>
           <div
             className="preview-stage"
+            data-card-theme={theme}
             aria-busy={
               status === "loading" ||
               Boolean(imageUrl && !imageReady && !imageFailed)

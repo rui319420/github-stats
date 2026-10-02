@@ -24,6 +24,7 @@ function svgResponse(svg: string, status = 200, isPrivate = false, retryAfter?: 
 }
 
 export async function GET(request: NextRequest) {
+  const options = parseCardOptions(request.nextUrl.searchParams);
   try {
     const includePrivate = parseBooleanParam(request.nextUrl.searchParams.get("include_private"));
     const session = includePrivate && !request.nextUrl.searchParams.has("card_token")
@@ -31,11 +32,11 @@ export async function GET(request: NextRequest) {
       : null;
     const stats = await getCustomizedLanguageStatsForRequest(request, session);
     if (!stats) {
-      return svgResponse(renderErrorSvg("有効な GitHub ユーザー名を入力してください。"), 400);
+      return svgResponse(renderErrorSvg("有効な GitHub ユーザー名を入力してください。", options), 400);
     }
-    return svgResponse(renderStatsSvg(stats, parseCardOptions(request.nextUrl.searchParams)), 200, includePrivate);
+    return svgResponse(renderStatsSvg(stats, options), 200, includePrivate);
   } catch (error) {
     const { status, message, retryAfter } = getApiError(error);
-    return svgResponse(renderErrorSvg(message), status, true, retryAfter);
+    return svgResponse(renderErrorSvg(message, options), status, true, retryAfter);
   }
 }
