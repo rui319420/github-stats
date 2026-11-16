@@ -1,0 +1,784 @@
+diff --git a/.env.example b/.env.example
+index b5d6231..40434cc 100644
+--- a/.env.example
++++ b/.env.example
+@@ -7,4 +7,11 @@ GITHUB_TOKEN=
+ AUTH_SECRET=
+ AUTH_GITHUB_ID=
+ AUTH_GITHUB_SECRET=
+-NEXTAUTH_URL=http://localhost:3000
+\ No newline at end of file
++NEXTAUTH_URL=http://localhost:3000
++
++# 42 カード（/api/42.svg）を使う場合に設定
++# https://profile.intra.42.fr/oauth/applications で発行した UID / SECRET
++FORTYTWO_CLIENT_ID=
++FORTYTWO_CLIENT_SECRET=
++# 表示を許可する 42 ログイン（カンマ区切り。先頭が既定）
++FORTYTWO_LOGIN=
+diff --git a/README.md b/README.md
+index 3c26d08..d781c32 100644
+--- a/README.md
++++ b/README.md
+@@ -131,6 +131,36 @@ SVG はスクリプト・外部フォント・外部画像に依存しません
+ 
+ 見出しやユーザーIDを非表示にすると、非表示の項目1つにつき上部の余白を20px詰め、カードの高さも縮めます（幅420pxの場合）。両方を非表示にした場合は40px縮まり、プレビューと出力SVGの両方に反映されます。
+ 
++## 42 カード
++
++42 の API から取得したプロフィールを、言語カードと同じ配色の SVG で返します。レベルと次のレベルまでの進捗バー、完了した課題数、グレード、取り組み中の課題、スキルを表示し、コアリションの色をアクセントに使います。
++
++```text
++GET /api/42.svg
++```
++
++```md
++![42 Profile](https://YOUR_DEPLOYMENT/api/42.svg?theme=auto)
++```
++
++1. [42 Intra のアプリケーション設定](https://profile.intra.42.fr/oauth/applications)でアプリを作成します。Redirect URI は使用しないため、デプロイ先の URL などで構いません。
++2. 発行された UID と SECRET を `FORTYTWO_CLIENT_ID`、`FORTYTWO_CLIENT_SECRET` に、表示する 42 ログインを `FORTYTWO_LOGIN` に設定します。
++3. `/api/42.svg` を開いて表示を確認してから README に貼ります。
++
++| パラメーター | 値・既定値 | 説明 |
++| --- | --- | --- |
++| `login` | `FORTYTWO_LOGIN` の先頭 | `FORTYTWO_LOGIN` に登録したログインだけ指定可能 |
++| `skills` | 0〜10、既定5 | 表示するスキル数（レベルの高い順）。`0` で非表示 |
++| `projects` | 0〜8、既定4 | 表示する取り組み中の課題数。`0` で非表示 |
++
++`theme`、`size`、`transparent`、`border`、`show_title`、`show_username`、`animated` は言語カードと共通です。
++
++- アプリの資格情報は 42 の全ユーザーを参照できるため、`FORTYTWO_LOGIN` に登録したログイン以外は 403 を返します。
++- メインカーサス（42cursus）を対象とし、Piscine の課題や親課題を持つ小課題は数えません。42cursus がないアカウントは直近のカーサスを使います。
++- 取得結果はプロセス内で30分再利用し、画像も30分キャッシュされます。42 API は1アプリあたり毎秒2リクエストまでのため、短い間隔での更新はできません。
++- 42 の SECRET には有効期限があります。カードが認証エラーになった場合は Intra で SECRET を更新し、環境変数を差し替えてください。
++- メールアドレス・在席状況・ログイン履歴は取得結果から破棄し、カードに含めません。
++
+ ## 環境変数
+ 
+ | 名前 | 用途 |
+@@ -141,6 +171,9 @@ SVG はスクリプト・外部フォント・外部画像に依存しません
+ | `AUTH_GITHUB_ID` | OAuth Client ID |
+ | `AUTH_GITHUB_SECRET` | OAuth Client Secret |
+ | `NEXTAUTH_URL` | アプリの正式な URL。公開時は HTTPS |
++| `FORTYTWO_CLIENT_ID` | 42 カード用アプリの UID（42 カード利用時のみ） |
++| `FORTYTWO_CLIENT_SECRET` | 42 カード用アプリの SECRET。有効期限あり |
++| `FORTYTWO_LOGIN` | 表示を許可する 42 ログイン。カンマ区切りで複数指定でき、先頭が既定 |
+ 
+ データベースは不要です。`DATABASE_URL` は使用していません。`.env.local` や秘密値は Git に追加しないでください。
+ 
+@@ -154,7 +187,7 @@ Vercel などの Next.js 対応ホスト、または Node.js サーバーを利
+ 4. OAuth のコールバック URL と `NEXTAUTH_URL` を実際の公開 URL に合わせます。
+ 5. 公開ユーザーの JSON／SVG、本人の非公開カードを確認してから README に貼ります。
+ 
+-公開集計は最大100ユーザーまで5分間再利用します。非公開のレスポンスとエラーは共有キャッシュに保存しない設定です。CDN・リバースプロキシを追加するときもこれを尊重し、クエリ付き URL とログの取り扱いに注意してください。
++公開集計は最大100ユーザーまで5分間再利用します。公開カードの SVG は `stale-while-revalidate` 付きで返すため、期限（言語カード5分・42 カード30分）を過ぎても CDN が直前の画像を最大1日返し、裏で更新します。GitHub の画像プロキシは数秒で取得を打ち切るので、訪問者に集計を待たせないための設定です。非公開のレスポンスとエラーは共有キャッシュに保存しない設定です。CDN・リバースプロキシを追加するときもこれを尊重し、クエリ付き URL とログの取り扱いに注意してください。
+ 
+ GitHub API のレート制限・失効した連携・存在しないユーザー・通信失敗は日本語のエラーとして返します。多数のリポジトリは集計に時間がかかるため、ホストの実行時間上限も確認してください。1プロセスの同時集計は最大4件で、超過時は429を返します。本番公開時はホスト側のWAF・IPレート制限も設定してください。
+ 
+@@ -166,5 +199,9 @@ GitHub API のレート制限・失効した連携・存在しないユーザー
+ - `app/lib/languageStatsRequest.ts`：公開／非公開の権限境界
+ - `app/lib/cardToken.ts`：集計用トークンの暗号化
+ - `app/lib/renderLanguageCard.ts`：安全な SVG 描画
++- `app/api/42.svg/route.ts`：42 カードのエンドポイント
++- `app/lib/fortyTwoApi.ts`：42 API の認証・取得・キャッシュ・表示対象の制限
++- `app/lib/fortyTwoStats.ts`：42 のレスポンスの正規化
++- `app/lib/renderFortyTwoCard.ts`：42 カードの SVG 描画
+ - `auth.ts`：GitHub OAuth
+ - `tests/`：集計・認証境界・描画の回帰テスト
+diff --git a/app/api/42.svg/route.ts b/app/api/42.svg/route.ts
+new file mode 100644
+index 0000000..074f25d
+--- /dev/null
++++ b/app/api/42.svg/route.ts
+@@ -0,0 +1,36 @@
++import { type NextRequest } from "next/server";
++import { getApiError } from "../../lib/apiError";
++import { PRIVATE_CACHE_CONTROL, publicImageCacheControl } from "../../lib/cacheControl";
++import { getAllowedLogins, getFortyTwoStats, resolveLogin } from "../../lib/fortyTwoApi";
++import { parseFortyTwoCardOptions, renderFortyTwoSvg } from "../../lib/renderFortyTwoCard";
++import { renderErrorSvg } from "../../lib/renderLanguageCard";
++
++export const runtime = "nodejs";
++
++function svgResponse(svg: string, status = 200, retryAfter?: number) {
++  return new Response(svg, {
++    status,
++    headers: {
++      "Content-Type": "image/svg+xml; charset=utf-8",
++      // 42 data changes slowly and the API allows few requests, so cache longer
++      // than the language card.
++      "Cache-Control": status === 200 ? publicImageCacheControl(1800) : PRIVATE_CACHE_CONTROL,
++      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
++      "X-Content-Type-Options": "nosniff",
++      "Referrer-Policy": "no-referrer",
++      ...(retryAfter ? { "Retry-After": String(retryAfter) } : {}),
++    },
++  });
++}
++
++export async function GET(request: NextRequest) {
++  const params = request.nextUrl.searchParams;
++  const options = parseFortyTwoCardOptions(params);
++  try {
++    const login = resolveLogin(params.get("login"), getAllowedLogins());
++    return svgResponse(renderFortyTwoSvg(await getFortyTwoStats(login), options));
++  } catch (error) {
++    const { status, message, retryAfter } = getApiError(error);
++    return svgResponse(renderErrorSvg(message, options), status, retryAfter);
++  }
++}
+diff --git a/app/api/languages.svg/route.ts b/app/api/languages.svg/route.ts
+index f201eed..73f76c7 100644
+--- a/app/api/languages.svg/route.ts
++++ b/app/api/languages.svg/route.ts
+@@ -3,6 +3,7 @@ import { auth } from "../../../auth";
+ import { getCustomizedLanguageStatsForRequest } from "../../lib/languageStatsRequest";
+ import { parseBooleanParam } from "../../lib/githubLanguages";
+ import { getApiError } from "../../lib/apiError";
++import { PRIVATE_CACHE_CONTROL, publicImageCacheControl } from "../../lib/cacheControl";
+ import { parseCardOptions, renderErrorSvg, renderStatsSvg } from "../../lib/renderLanguageCard";
+ 
+ export const runtime = "nodejs";
+@@ -13,8 +14,8 @@ function svgResponse(svg: string, status = 200, isPrivate = false, retryAfter?:
+     headers: {
+       "Content-Type": "image/svg+xml; charset=utf-8",
+       "Cache-Control": status !== 200 || isPrivate
+-        ? "private, no-store"
+-        : "public, max-age=300, s-maxage=300",
++        ? PRIVATE_CACHE_CONTROL
++        : publicImageCacheControl(300),
+       "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+       "X-Content-Type-Options": "nosniff",
+       "Referrer-Policy": "no-referrer",
+diff --git a/app/lib/cacheControl.ts b/app/lib/cacheControl.ts
+new file mode 100644
+index 0000000..efb0a89
+--- /dev/null
++++ b/app/lib/cacheControl.ts
+@@ -0,0 +1,10 @@
++const STALE_SECONDS = 86_400;
++
++export const PRIVATE_CACHE_CONTROL = "private, no-store";
++
++// GitHub's image proxy gives up after a few seconds, so a visitor must never
++// wait for a fresh aggregation. Once `seconds` have passed the CDN keeps
++// serving the previous image for up to a day and refreshes it in the background.
++export function publicImageCacheControl(seconds: number) {
++  return `public, max-age=${seconds}, s-maxage=${seconds}, stale-while-revalidate=${STALE_SECONDS}`;
++}
+diff --git a/app/lib/fortyTwoApi.ts b/app/lib/fortyTwoApi.ts
+new file mode 100644
+index 0000000..133f7f9
+--- /dev/null
++++ b/app/lib/fortyTwoApi.ts
+@@ -0,0 +1,128 @@
++import { ApiError } from "./apiError";
++import { normalizeFortyTwoUser, type FortyTwoStats } from "./fortyTwoStats";
++
++const API_ORIGIN = "https://api.intra.42.fr";
++const REQUEST_TIMEOUT_MS = 8_000;
++const CACHE_TTL_MS = 30 * 60_000;
++const TOKEN_MARGIN_MS = 60_000;
++
++type Fetch = typeof fetch;
++
++interface TokenEntry {
++  value: string;
++  expiresAt: number;
++}
++
++interface CacheEntry {
++  promise: Promise<FortyTwoStats>;
++  expiresAt: number;
++}
++
++let token: TokenEntry | null = null;
++const cache = new Map<string, CacheEntry>();
++
++// The application credentials can read any student's profile. Only logins the
++// operator listed in FORTYTWO_LOGIN are served, so this deployment cannot be
++// used as an open proxy to other people's 42 data.
++export function getAllowedLogins(env: Record<string, string | undefined> = process.env): string[] {
++  return (env.FORTYTWO_LOGIN ?? "")
++    .split(",")
++    .map((login) => login.trim().toLowerCase())
++    .filter((login) => /^[a-z0-9-]{1,32}$/.test(login));
++}
++
++export function resolveLogin(requested: string | null, allowed: string[]): string {
++  if (!allowed.length) {
++    throw new ApiError("42 カードが未設定です。FORTYTWO_LOGIN を設定してください。", 503);
++  }
++  const login = requested?.trim().toLowerCase();
++  if (!login) return allowed[0];
++  if (!allowed.includes(login)) {
++    throw new ApiError("この 42 ログインは表示対象に設定されていません。", 403);
++  }
++  return login;
++}
++
++function upstreamError(status: number, retryAfter: string | null): ApiError {
++  if (status === 429) {
++    const wait = Number(retryAfter);
++    return new ApiError("42 API の利用上限に達しました。時間をおいて再試行してください。", 429,
++      Number.isFinite(wait) && wait > 0 ? Math.ceil(Math.min(wait, 3600)) : 60);
++  }
++  if (status === 401 || status === 403) {
++    return new ApiError("42 API の認証に失敗しました。アプリの UID と SECRET を確認してください。", 502);
++  }
++  if (status === 404) return new ApiError("42 のユーザーが見つかりません。", 404);
++  return new ApiError("42 のデータを取得できませんでした。時間をおいて再試行してください。", 502);
++}
++
++async function request(fetchImpl: Fetch, url: string, init: RequestInit): Promise<unknown> {
++  let response: Response;
++  try {
++    response = await fetchImpl(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
++  } catch {
++    // Never surface upstream exception text: it can contain request details.
++    throw new ApiError("42 API からの応答がありませんでした。再試行してください。", 504);
++  }
++  if (!response.ok) throw upstreamError(response.status, response.headers.get("retry-after"));
++  try {
++    return await response.json();
++  } catch {
++    throw new ApiError("42 のデータを取得できませんでした。時間をおいて再試行してください。", 502);
++  }
++}
++
++async function getToken(fetchImpl: Fetch): Promise<string> {
++  if (token && token.expiresAt > Date.now()) return token.value;
++  const clientId = process.env.FORTYTWO_CLIENT_ID;
++  const clientSecret = process.env.FORTYTWO_CLIENT_SECRET;
++  if (!clientId || !clientSecret) {
++    throw new ApiError("42 カードが未設定です。FORTYTWO_CLIENT_ID と FORTYTWO_CLIENT_SECRET を設定してください。", 503);
++  }
++  const payload = await request(fetchImpl, `${API_ORIGIN}/oauth/token`, {
++    method: "POST",
++    headers: { "Content-Type": "application/x-www-form-urlencoded" },
++    body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
++  }) as { access_token?: unknown; expires_in?: unknown } | null;
++  if (typeof payload?.access_token !== "string" || !payload.access_token) {
++    throw new ApiError("42 API の認証に失敗しました。アプリの UID と SECRET を確認してください。", 502);
++  }
++  const lifetime = typeof payload.expires_in === "number" && payload.expires_in > 0 ? payload.expires_in * 1000 : 0;
++  token = { value: payload.access_token, expiresAt: Date.now() + Math.max(0, lifetime - TOKEN_MARGIN_MS) };
++  return token.value;
++}
++
++async function fetchStats(login: string, fetchImpl: Fetch): Promise<FortyTwoStats> {
++  const headers = { Authorization: `Bearer ${await getToken(fetchImpl)}` };
++  const path = `${API_ORIGIN}/v2/users/${encodeURIComponent(login)}`;
++  // Sequential on purpose: 42 allows only 2 requests per second per application.
++  const user = await request(fetchImpl, path, { headers });
++  // The coalition only supplies the accent color, so its failure is not fatal.
++  const coalitions = await request(fetchImpl, `${path}/coalitions`, { headers }).catch(() => null);
++  const stats = normalizeFortyTwoUser(user, coalitions);
++  if (!stats) throw new ApiError("42 のデータを取得できませんでした。時間をおいて再試行してください。", 502);
++  return stats;
++}
++
++// `login` must come from resolveLogin, which bounds the cache to the allowlist.
++export function getFortyTwoStats(login: string, fetchImpl: Fetch = fetch): Promise<FortyTwoStats> {
++  const cached = cache.get(login);
++  if (cached && cached.expiresAt > Date.now()) return cached.promise;
++  const entry: CacheEntry = {
++    expiresAt: Date.now() + CACHE_TTL_MS,
++    promise: fetchStats(login, fetchImpl),
++  };
++  cache.set(login, entry);
++  entry.promise = entry.promise.catch((error: unknown) => {
++    if (cache.get(login) === entry) cache.delete(login);
++    // A rejected token must not be reused for the next attempt.
++    if (error instanceof ApiError && error.status === 502) token = null;
++    throw error;
++  });
++  return entry.promise;
++}
++
++export function resetFortyTwoCacheForTests() {
++  token = null;
++  cache.clear();
++}
+diff --git a/app/lib/fortyTwoStats.ts b/app/lib/fortyTwoStats.ts
+new file mode 100644
+index 0000000..9bcd796
+--- /dev/null
++++ b/app/lib/fortyTwoStats.ts
+@@ -0,0 +1,134 @@
++// Pure normalization of 42 API responses. No network access or secrets here so
++// the renderer and tests can share it.
++
++export type FortyTwoProjectStatus = "in_progress" | "waiting_for_correction" | "forming_team";
++
++export interface FortyTwoProject {
++  name: string;
++  status: FortyTwoProjectStatus;
++}
++
++export interface FortyTwoSkill {
++  name: string;
++  level: number;
++}
++
++export interface FortyTwoCoalition {
++  name: string;
++  color: string;
++}
++
++export interface FortyTwoStats {
++  login: string;
++  campus: string | null;
++  cursus: string | null;
++  grade: string | null;
++  level: number;
++  completedProjects: number;
++  currentProjects: FortyTwoProject[];
++  skills: FortyTwoSkill[];
++  coalition: FortyTwoCoalition | null;
++}
++
++export const FORTY_TWO_ACCENT = "#00babc";
++const MAIN_CURSUS_SLUG = "42cursus";
++
++const ACTIVE_STATUSES: Record<string, FortyTwoProjectStatus> = {
++  in_progress: "in_progress",
++  waiting_for_correction: "waiting_for_correction",
++  searching_a_group: "forming_team",
++  creating_group: "forming_team",
++};
++
++type Json = Record<string, unknown>;
++
++function isObject(value: unknown): value is Json {
++  return typeof value === "object" && value !== null && !Array.isArray(value);
++}
++
++function objects(value: unknown): Json[] {
++  return Array.isArray(value) ? value.filter(isObject) : [];
++}
++
++function text(value: unknown): string | null {
++  return typeof value === "string" && value.trim() ? value.trim() : null;
++}
++
++function finite(value: unknown): number {
++  return typeof value === "number" && Number.isFinite(value) ? value : 0;
++}
++
++function time(value: unknown): number {
++  const parsed = typeof value === "string" ? Date.parse(value) : NaN;
++  return Number.isFinite(parsed) ? parsed : 0;
++}
++
++// The main curriculum wins; otherwise the most recently started cursus
++// (for example a Piscine-only account).
++function pickCursus(user: Json): Json | null {
++  const entries = objects(user.cursus_users);
++  const main = entries.find((entry) => isObject(entry.cursus) && entry.cursus.slug === MAIN_CURSUS_SLUG);
++  if (main) return main;
++  return entries.reduce<Json | null>(
++    (latest, entry) => (!latest || time(entry.begin_at) >= time(latest.begin_at) ? entry : latest),
++    null,
++  );
++}
++
++function pickCampus(user: Json): string | null {
++  const campuses = objects(user.campus);
++  const primary = objects(user.campus_users).find((entry) => entry.is_primary === true);
++  const campus = campuses.find((entry) => entry.id === primary?.campus_id) ?? campuses[0];
++  return text(campus?.name);
++}
++
++export function normalizeCoalition(payload: unknown): FortyTwoCoalition | null {
++  // A user can keep an old (Piscine) coalition; the API lists the newest last.
++  const coalition = objects(payload).at(-1);
++  const name = text(coalition?.name);
++  if (!name) return null;
++  const color = text(coalition?.color);
++  return { name, color: color && /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : FORTY_TWO_ACCENT };
++}
++
++export function normalizeFortyTwoUser(payload: unknown, coalitions: unknown = null): FortyTwoStats | null {
++  if (!isObject(payload)) return null;
++  const login = text(payload.login);
++  if (!login) return null;
++
++  const cursusUser = pickCursus(payload);
++  const cursus = isObject(cursusUser?.cursus) ? cursusUser.cursus : null;
++  const cursusId = cursus?.id ?? cursusUser?.cursus_id;
++
++  // Sub-projects (Piscine days, exam ranks' parts) have a parent and would
++  // inflate the counts.
++  const projects = objects(payload.projects_users).filter((entry) => {
++    const project = isObject(entry.project) ? entry.project : null;
++    if (!project || !text(project.name) || project.parent_id != null) return false;
++    return cursusId === undefined || !Array.isArray(entry.cursus_ids) || entry.cursus_ids.includes(cursusId);
++  });
++
++  const currentProjects = projects.flatMap((entry) => {
++    const status = typeof entry.status === "string" ? ACTIVE_STATUSES[entry.status] : undefined;
++    return status ? [{ name: text((entry.project as Json).name)!, status }] : [];
++  });
++
++  const skills = objects(cursusUser?.skills)
++    .flatMap((skill) => {
++      const name = text(skill.name);
++      return name ? [{ name, level: Math.max(0, finite(skill.level)) }] : [];
++    })
++    .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
++
++  return {
++    login,
++    campus: pickCampus(payload),
++    cursus: text(cursus?.name),
++    grade: text(cursusUser?.grade),
++    level: Math.max(0, finite(cursusUser?.level)),
++    completedProjects: projects.filter((entry) => entry.status === "finished" && entry["validated?"] === true).length,
++    currentProjects,
++    skills,
++    coalition: normalizeCoalition(coalitions),
++  };
++}
+diff --git a/app/lib/renderFortyTwoCard.ts b/app/lib/renderFortyTwoCard.ts
+new file mode 100644
+index 0000000..74c50da
+--- /dev/null
++++ b/app/lib/renderFortyTwoCard.ts
+@@ -0,0 +1,142 @@
++import { CARD_THEMES, clamp, truncateLabel } from "./chartOptions";
++import { cardThemeStyles, languageTextColor } from "./cardTheme";
++import { FORTY_TWO_ACCENT, type FortyTwoProjectStatus, type FortyTwoStats } from "./fortyTwoStats";
++import { escapeXml, parseCardOptions, type CardOptions } from "./renderLanguageCard";
++
++export const FORTY_TWO_CARD_TITLE = "42 Profile";
++const DEFAULT_SKILL_COUNT = 5;
++const DEFAULT_PROJECT_COUNT = 4;
++const ROW_HEIGHT = 22;
++
++export interface FortyTwoCardOptions extends CardOptions {
++  projectCount: number;
++  skillCount: number;
++}
++
++const STATUS_LABELS: Record<FortyTwoProjectStatus, string> = {
++  in_progress: "進行中",
++  waiting_for_correction: "評価待ち",
++  forming_team: "チーム編成中",
++};
++
++function parseCount(value: string | null, fallback: number, max: number) {
++  const count = value?.trim() ? Number(value) : NaN;
++  return Number.isInteger(count) ? clamp(count, 0, max) : fallback;
++}
++
++export function parseFortyTwoCardOptions(params: URLSearchParams): FortyTwoCardOptions {
++  return {
++    ...parseCardOptions(params),
++    projectCount: parseCount(params.get("projects"), DEFAULT_PROJECT_COUNT, 8),
++    skillCount: parseCount(params.get("skills"), DEFAULT_SKILL_COUNT, 10),
++  };
++}
++
++// 42 levels are "integer level + fraction towards the next one" (5.42 = 42%).
++export function levelProgress(level: number) {
++  const whole = Math.floor(level);
++  // Guard against 5.9999 rendering as "100%" of level 5.
++  return { whole, percent: Math.min(99, Math.round((level - whole) * 100)) };
++}
++
++function barStyles(options: FortyTwoCardOptions) {
++  if (!options.animated) return "";
++  return `<style>
++    .bar { transform-box: fill-box; transform-origin: left center; animation: bar-grow .9s ease-out backwards; }
++    @keyframes bar-grow { from { transform: scaleX(0); } }
++    @media (prefers-reduced-motion: reduce) { .bar { animation: none; } }
++  </style>`;
++}
++
++export function renderFortyTwoSvg(stats: FortyTwoStats, options: FortyTwoCardOptions) {
++  const theme = CARD_THEMES[options.theme];
++  const accent = stats.coalition?.color ?? FORTY_TWO_ACCENT;
++  // Fills keep the coalition color; text is adjusted for contrast per theme.
++  const accentText = languageTextColor(accent, options.theme, 0);
++  const { whole, percent } = levelProgress(stats.level);
++  const parts: string[] = [];
++  let y = 28 + (options.showTitle ? 20 : 0) + (options.showUsername ? 20 : 0);
++
++  // Level
++  parts.push(`<text x="28" y="${y + 30}" fill="${theme.foreground}" font-size="30" font-weight="700" class="numeric"><tspan fill="${theme.muted}" font-size="13" font-weight="400">Lv. </tspan>${whole}</text>
++    <text x="392" y="${y + 30}" text-anchor="end" fill="${theme.muted}" font-size="12" class="numeric">${percent}% → Lv. ${whole + 1}</text>
++    <rect x="28" y="${y + 42}" width="364" height="10" rx="5" fill="${theme.border}"/>
++    ${percent > 0 ? `<rect class="bar" x="28" y="${y + 42}" width="${(Math.max(10, 364 * percent / 100)).toFixed(1)}" height="10" rx="5" fill="${accent}"/>` : ""}`);
++  y += 52;
++
++  // Totals
++  const totals: Array<[string, string]> = [["完了した課題", String(stats.completedProjects)]];
++  if (stats.grade) totals.push(["グレード", truncateLabel(stats.grade, 18)]);
++  parts.push(totals.map(([label, value], index) => {
++    const x = 28 + index * 196;
++    return `<text x="${x}" y="${y + 28}" fill="${theme.muted}" font-size="11">${label}</text>
++    <text x="${x}" y="${y + 50}" fill="${theme.foreground}" font-size="17" font-weight="700" class="${index === 0 ? "numeric" : ""}">${escapeXml(value)}</text>`;
++  }).join(""));
++  y += 50;
++
++  // Current projects
++  if (options.projectCount > 0) {
++    const shown = stats.currentProjects.slice(0, options.projectCount);
++    const hidden = stats.currentProjects.length - shown.length;
++    parts.push(`<text x="28" y="${y + 32}" fill="${theme.muted}" font-size="11" font-weight="700">取り組み中の課題</text>`);
++    y += 32;
++    if (!shown.length) {
++      parts.push(`<text x="28" y="${y + ROW_HEIGHT}" fill="${theme.muted}" font-size="12">現在取り組み中の課題はありません</text>`);
++      y += ROW_HEIGHT;
++    }
++    for (const project of shown) {
++      y += ROW_HEIGHT;
++      parts.push(`<circle cx="32" cy="${y - 4}" r="4" fill="${accent}"/>
++    <text x="44" y="${y}" fill="${theme.foreground}" font-size="13" font-weight="600">${escapeXml(truncateLabel(project.name, 30))}</text>
++    <text x="392" y="${y}" text-anchor="end" fill="${project.status === "in_progress" ? theme.muted : accentText}" font-size="11">${STATUS_LABELS[project.status]}</text>`);
++    }
++    if (hidden > 0) {
++      y += 18;
++      parts.push(`<text x="44" y="${y}" fill="${theme.muted}" font-size="11">ほか ${hidden} 件</text>`);
++    }
++  }
++
++  // Skills
++  const skills = stats.skills.slice(0, options.skillCount);
++  if (skills.length) {
++    // Bars compare skills with each other; the exact level is printed beside each.
++    const scale = Math.max(1, Math.ceil(skills[0].level));
++    parts.push(`<text x="28" y="${y + 32}" fill="${theme.muted}" font-size="11" font-weight="700">スキル</text>`);
++    y += 32;
++    for (const skill of skills) {
++      y += ROW_HEIGHT;
++      const width = 140 * Math.min(1, skill.level / scale);
++      parts.push(`<g><title>${escapeXml(skill.name)}: ${skill.level.toFixed(2)}</title>
++    <text x="28" y="${y}" fill="${theme.foreground}" font-size="11">${escapeXml(truncateLabel(skill.name, 27))}</text>
++    <rect x="204" y="${y - 9}" width="140" height="8" rx="4" fill="${theme.border}"/>
++    ${width > 0 ? `<rect class="bar" x="204" y="${y - 9}" width="${Math.max(8, width).toFixed(1)}" height="8" rx="4" fill="${accent}"/>` : ""}
++    <text x="392" y="${y}" text-anchor="end" fill="${theme.muted}" font-size="11" class="numeric">${skill.level.toFixed(2)}</text></g>`);
++    }
++  }
++
++  const height = y + 26;
++  const subtitle = [`@${stats.login}`, stats.campus ? `42 ${stats.campus}` : null].filter(Boolean).join(" · ");
++  const description = [
++    `レベル ${stats.level.toFixed(2)}`,
++    `完了した課題 ${stats.completedProjects} 件`,
++    stats.currentProjects.length ? `取り組み中: ${stats.currentProjects.map((project) => project.name).join("、")}` : null,
++    stats.coalition ? `コアリション ${stats.coalition.name}` : null,
++  ].filter(Boolean).join("。");
++  const coalition = stats.coalition
++    ? `<text x="392" y="35" text-anchor="end" fill="${accentText}" font-size="12" font-weight="700">${escapeXml(truncateLabel(stats.coalition.name, 22))}</text>`
++    : "";
++
++  return `<?xml version="1.0" encoding="UTF-8"?>
++<svg width="${options.size}" height="${Math.round(options.size * height / 420)}" viewBox="0 0 420 ${height}" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="card-title card-description" data-card-theme="${options.theme}">
++  <title id="card-title">${options.showUsername ? `${escapeXml(stats.login)} — ` : ""}${FORTY_TWO_CARD_TITLE}</title>
++  <desc id="card-description">${escapeXml(description)}。</desc>
++  <style>text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', sans-serif; } .numeric { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-variant-numeric: tabular-nums; }</style>
++  ${barStyles(options)}
++  <style>${cardThemeStyles(options.theme, [accent])}</style>
++  <rect x="1" y="1" width="418" height="${height - 2}" rx="18" fill="${options.transparent ? "none" : theme.background}" stroke="${options.border ? theme.border : "none"}"/>
++  ${options.showTitle ? `<text x="28" y="35" fill="${theme.foreground}" font-size="17" font-weight="700">${FORTY_TWO_CARD_TITLE}</text>` : ""}
++  ${options.showUsername ? `<text x="28" y="${options.showTitle ? 55 : 35}" fill="${theme.muted}" font-size="12">${escapeXml(truncateLabel(subtitle, 44))}</text>` : ""}
++  ${coalition}
++  ${parts.join("\n  ")}
++</svg>`;
++}
+diff --git a/docs/knowledge.md b/docs/knowledge.md
+index 6b41759..8dfdad4 100644
+--- a/docs/knowledge.md
++++ b/docs/knowledge.md
+@@ -94,3 +94,40 @@ GitHub READMEの画像（HTML img）として参照するSVGは対話イベン
+ - `app/lib/languageCardLayout.ts`
+ - `app/lib/languageStats.ts`
+ - `app/lib/renderLanguageCard.ts`
++
++## 2026-11-16 — 42 カードの表示対象を許可リストに限定
++
++### Context
++42 API のプロフィール（レベル・課題・スキル・コアリション）を `/api/42.svg` で配信する機能を追加した。
++
++### Finding
++Client Credentials のトークンは 42 の全ユーザーを参照できる。`login` を自由に受け付けると、このデプロイが他人の 42 データを匿名で取得できるプロキシになり、毎秒2リクエストの上限も第三者に消費される。
++
++### Decision
++`FORTYTWO_LOGIN` に登録したログインだけを配信し、それ以外は 403 とする。レスポンスは必要な項目だけに正規化し、メール・在席状況などは保持しない。成功結果は30分再利用し、失敗は保持しない。上流のエラー本文は返さず、固定の日本語メッセージに置き換える。コアリションの取得失敗は致命的にせず、既定のアクセント色で描画する。
++
++### Related files
++- `app/lib/fortyTwoApi.ts`
++- `app/lib/fortyTwoStats.ts`
++- `app/lib/renderFortyTwoCard.ts`
++- `app/api/42.svg/route.ts`
++
++## 2026-11-16 — README の画像が表示されないことがある
++
++### Context
++GitHub のプロフィールを開いたとき、言語カードが壊れた画像になることがあった。
++
++### Finding
++GitHub の画像プロキシは数秒で取得を打ち切る。`s-maxage=300` だけでは、5分以上アクセスがないと次の訪問者がコールドスタートと集計（32リポジトリで約1.4〜3秒）を待つことになり、打ち切りに掛かりやすい。200 以外のエラー SVG も表示されない。
++
++### Decision
++公開カードの SVG に `stale-while-revalidate=86400` を付け、期限切れ後も CDN が直前の画像を返して裏で更新する。非公開のレスポンスとエラーは従来どおり `private, no-store`。JSON API はプレビューの即時性を優先して変更しない。
++
++### Reason
++実行環境を移しても集計時間は残る。訪問者の経路から集計を外すほうが効果が大きく、変更も小さい。
++
++### Related files
++- `app/lib/cacheControl.ts`
++- `app/api/languages.svg/route.ts`
++- `app/api/42.svg/route.ts`
++
+diff --git a/tests/cacheControl.test.ts b/tests/cacheControl.test.ts
+new file mode 100644
+index 0000000..3687ce5
+--- /dev/null
++++ b/tests/cacheControl.test.ts
+@@ -0,0 +1,8 @@
++import assert from "node:assert/strict";
++import { test } from "node:test";
++import { PRIVATE_CACHE_CONTROL, publicImageCacheControl } from "../app/lib/cacheControl";
++
++test("public images are served stale while the CDN revalidates", () => {
++  assert.equal(publicImageCacheControl(300), "public, max-age=300, s-maxage=300, stale-while-revalidate=86400");
++  assert.equal(PRIVATE_CACHE_CONTROL, "private, no-store");
++});
+diff --git a/tests/fortyTwo.test.ts b/tests/fortyTwo.test.ts
+new file mode 100644
+index 0000000..07f4d01
+--- /dev/null
++++ b/tests/fortyTwo.test.ts
+@@ -0,0 +1,128 @@
++import assert from "node:assert/strict";
++import { test } from "node:test";
++import { getAllowedLogins, getFortyTwoStats, resetFortyTwoCacheForTests, resolveLogin } from "../app/lib/fortyTwoApi";
++import { FORTY_TWO_ACCENT, normalizeFortyTwoUser } from "../app/lib/fortyTwoStats";
++import { levelProgress, parseFortyTwoCardOptions, renderFortyTwoSvg } from "../app/lib/renderFortyTwoCard";
++import { ApiError } from "../app/lib/apiError";
++
++const user = {
++  id: 1,
++  login: "alice",
++  email: "alice@example.com",
++  campus: [{ id: 26, name: "Tokyo" }],
++  campus_users: [{ campus_id: 26, is_primary: true }],
++  cursus_users: [
++    { level: 9.1, grade: null, begin_at: "2025-01-06T00:00:00Z", cursus: { id: 9, slug: "c-piscine", name: "C Piscine" }, skills: [] },
++    {
++      level: 5.42, grade: "Learner", begin_at: "2025-04-01T00:00:00Z",
++      cursus: { id: 21, slug: "42cursus", name: "42cursus" },
++      skills: [{ name: "Rigor", level: 4.1 }, { name: "Algorithms & AI", level: 6.25 }, { name: "Unix", level: 3 }],
++    },
++  ],
++  projects_users: [
++    { status: "finished", "validated?": true, cursus_ids: [21], project: { name: "Libft", parent_id: null } },
++    { status: "finished", "validated?": false, cursus_ids: [21], project: { name: "push_swap", parent_id: null } },
++    { status: "finished", "validated?": true, cursus_ids: [9], project: { name: "C Piscine C 00", parent_id: null } },
++    { status: "finished", "validated?": true, cursus_ids: [21], project: { name: "part", parent_id: 7 } },
++    { status: "in_progress", "validated?": null, cursus_ids: [21], project: { name: "minishell", parent_id: null } },
++    { status: "waiting_for_correction", "validated?": null, cursus_ids: [21], project: { name: "<philo>", parent_id: null } },
++  ],
++};
++
++test("normalizeFortyTwoUser keeps only the main cursus and top-level projects", () => {
++  const stats = normalizeFortyTwoUser(user, [{ name: "Old", color: "#111111" }, { name: "Gun", color: "#FF6950" }]);
++  assert.ok(stats);
++  assert.equal(stats.level, 5.42);
++  assert.equal(stats.campus, "Tokyo");
++  assert.equal(stats.grade, "Learner");
++  assert.equal(stats.completedProjects, 1);
++  assert.deepEqual(stats.currentProjects, [
++    { name: "minishell", status: "in_progress" },
++    { name: "<philo>", status: "waiting_for_correction" },
++  ]);
++  assert.deepEqual(stats.skills.map((skill) => skill.name), ["Algorithms & AI", "Rigor", "Unix"]);
++  assert.deepEqual(stats.coalition, { name: "Gun", color: "#ff6950" });
++  assert.equal(JSON.stringify(stats).includes("example.com"), false);
++});
++
++test("normalizeFortyTwoUser tolerates missing data and unsafe coalition colors", () => {
++  assert.equal(normalizeFortyTwoUser(null), null);
++  assert.equal(normalizeFortyTwoUser({}), null);
++  const stats = normalizeFortyTwoUser({ login: "bob" }, [{ name: "X", color: "red\" onload=\"x" }]);
++  assert.ok(stats);
++  assert.equal(stats.level, 0);
++  assert.equal(stats.coalition?.color, FORTY_TWO_ACCENT);
++});
++
++test("levelProgress splits the level and never shows 100%", () => {
++  assert.deepEqual(levelProgress(5.42), { whole: 5, percent: 42 });
++  assert.deepEqual(levelProgress(5.999), { whole: 5, percent: 99 });
++  assert.deepEqual(levelProgress(0), { whole: 0, percent: 0 });
++});
++
++test("renderFortyTwoSvg escapes names and stays self-contained", () => {
++  const stats = normalizeFortyTwoUser(user, [{ name: "Gun & Co", color: "#ff6950" }])!;
++  const options = parseFortyTwoCardOptions(new URLSearchParams({ skills: "2", theme: "auto" }));
++  const svg = renderFortyTwoSvg(stats, options);
++  assert.match(svg, /Lv\. <\/tspan>5</);
++  assert.match(svg, /42% → Lv\. 6/);
++  assert.match(svg, /&lt;philo&gt;/);
++  assert.match(svg, /Gun &amp; Co/);
++  assert.match(svg, /評価待ち/);
++  assert.match(svg, /Algorithms &amp; AI/);
++  assert.equal(svg.includes("Unix"), false);
++  assert.equal(/<script|href=|url\(/i.test(svg), false);
++  assert.match(svg, /--card-language-0/);
++});
++
++test("renderFortyTwoSvg handles an empty profile and hidden sections", () => {
++  const stats = normalizeFortyTwoUser({ login: "bob" })!;
++  const svg = renderFortyTwoSvg(stats, parseFortyTwoCardOptions(new URLSearchParams()));
++  assert.match(svg, /現在取り組み中の課題はありません/);
++  assert.equal(svg.includes("スキル"), false);
++  const compact = renderFortyTwoSvg(stats, parseFortyTwoCardOptions(new URLSearchParams({ projects: "0" })));
++  assert.equal(compact.includes("取り組み中の課題"), false);
++});
++
++test("only allowlisted logins are served", () => {
++  const allowed = getAllowedLogins({ FORTYTWO_LOGIN: " Alice, bob ,../etc" });
++  assert.deepEqual(allowed, ["alice", "bob"]);
++  assert.equal(resolveLogin(null, allowed), "alice");
++  assert.equal(resolveLogin("BOB", allowed), "bob");
++  assert.throws(() => resolveLogin("mallory", allowed), (error) => error instanceof ApiError && error.status === 403);
++  assert.throws(() => resolveLogin(null, []), (error) => error instanceof ApiError && error.status === 503);
++});
++
++test("getFortyTwoStats reuses the token and the cached result", async () => {
++  resetFortyTwoCacheForTests();
++  process.env.FORTYTWO_CLIENT_ID = "id";
++  process.env.FORTYTWO_CLIENT_SECRET = "secret";
++  const calls: string[] = [];
++  const fakeFetch = (async (input: string | URL | Request, init?: RequestInit) => {
++    const url = String(input);
++    calls.push(url);
++    if (url.endsWith("/oauth/token")) return Response.json({ access_token: "t", expires_in: 7200 });
++    assert.equal(new Headers(init?.headers).get("authorization"), "Bearer t");
++    if (url.endsWith("/coalitions")) return new Response("nope", { status: 500 });
++    return Response.json(user);
++  }) as typeof fetch;
++  const first = await getFortyTwoStats("alice", fakeFetch);
++  const second = await getFortyTwoStats("alice", fakeFetch);
++  assert.equal(first, second);
++  assert.equal(first.coalition, null);
++  assert.equal(calls.length, 3);
++  resetFortyTwoCacheForTests();
++});
++
++test("getFortyTwoStats hides upstream details and does not cache failures", async () => {
++  resetFortyTwoCacheForTests();
++  process.env.FORTYTWO_CLIENT_ID = "id";
++  process.env.FORTYTWO_CLIENT_SECRET = "secret";
++  const failing = (async () => new Response("secret upstream body", { status: 401 })) as typeof fetch;
++  await assert.rejects(getFortyTwoStats("alice", failing), (error) =>
++    error instanceof ApiError && error.status === 502 && !error.message.includes("upstream"));
++  const working = (async (input: string | URL | Request) =>
++    String(input).endsWith("/oauth/token") ? Response.json({ access_token: "t", expires_in: 7200 }) : Response.json(user)) as typeof fetch;
++  assert.equal((await getFortyTwoStats("alice", working)).login, "alice");
++  resetFortyTwoCacheForTests();
++});
