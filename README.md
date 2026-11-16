@@ -131,6 +131,36 @@ SVG はスクリプト・外部フォント・外部画像に依存しません�
 
 見出しやユーザーIDを非表示にすると、非表示の項目1つにつき上部の余白を20px詰め、カードの高さも縮めます（幅420pxの場合）。両方を非表示にした場合は40px縮まり、プレビューと出力SVGの両方に反映されます。
 
+## 42 カード
+
+42 の API から取得したプロフィールを、言語カードと同じ配色の SVG で返します。レベルと次のレベルまでの進捗バー、完了した課題数、グレード、取り組み中の課題、スキルを表示し、コアリションの色をアクセントに使います。
+
+```text
+GET /api/42.svg
+```
+
+```md
+![42 Profile](https://YOUR_DEPLOYMENT/api/42.svg?theme=auto)
+```
+
+1. [42 Intra のアプリケーション設定](https://profile.intra.42.fr/oauth/applications)でアプリを作成します。Redirect URI は使用しないため、デプロイ先の URL などで構いません。
+2. 発行された UID と SECRET を `FORTYTWO_CLIENT_ID`、`FORTYTWO_CLIENT_SECRET` に、表示する 42 ログインを `FORTYTWO_LOGIN` に設定します。
+3. `/api/42.svg` を開いて表示を確認してから README に貼ります。
+
+| パラメーター | 値・既定値 | 説明 |
+| --- | --- | --- |
+| `login` | `FORTYTWO_LOGIN` の先頭 | `FORTYTWO_LOGIN` に登録したログインだけ指定可能 |
+| `skills` | 0〜10、既定5 | 表示するスキル数（レベルの高い順）。`0` で非表示 |
+| `projects` | 0〜8、既定4 | 表示する取り組み中の課題数。`0` で非表示 |
+
+`theme`、`size`、`transparent`、`border`、`show_title`、`show_username`、`animated` は言語カードと共通です。
+
+- アプリの資格情報は 42 の全ユーザーを参照できるため、`FORTYTWO_LOGIN` に登録したログイン以外は 403 を返します。
+- メインカーサス（42cursus）を対象とし、Piscine の課題や親課題を持つ小課題は数えません。42cursus がないアカウントは直近のカーサスを使います。
+- 取得結果はプロセス内で30分再利用し、画像も30分キャッシュされます。42 API は1アプリあたり毎秒2リクエストまでのため、短い間隔での更新はできません。
+- 42 の SECRET には有効期限があります。カードが認証エラーになった場合は Intra で SECRET を更新し、環境変数を差し替えてください。
+- メールアドレス・在席状況・ログイン履歴は取得結果から破棄し、カードに含めません。
+
 ## 環境変数
 
 | 名前 | 用途 |
@@ -141,6 +171,9 @@ SVG はスクリプト・外部フォント・外部画像に依存しません�
 | `AUTH_GITHUB_ID` | OAuth Client ID |
 | `AUTH_GITHUB_SECRET` | OAuth Client Secret |
 | `NEXTAUTH_URL` | アプリの正式な URL。公開時は HTTPS |
+| `FORTYTWO_CLIENT_ID` | 42 カード用アプリの UID（42 カード利用時のみ） |
+| `FORTYTWO_CLIENT_SECRET` | 42 カード用アプリの SECRET。有効期限あり |
+| `FORTYTWO_LOGIN` | 表示を許可する 42 ログイン。カンマ区切りで複数指定でき、先頭が既定 |
 
 データベースは不要です。`DATABASE_URL` は使用していません。`.env.local` や秘密値は Git に追加しないでください。
 
@@ -154,7 +187,7 @@ Vercel などの Next.js 対応ホスト、または Node.js サーバーを利�
 4. OAuth のコールバック URL と `NEXTAUTH_URL` を実際の公開 URL に合わせます。
 5. 公開ユーザーの JSON／SVG、本人の非公開カードを確認してから README に貼ります。
 
-公開集計は最大100ユーザーまで5分間再利用します。非公開のレスポンスとエラーは共有キャッシュに保存しない設定です。CDN・リバースプロキシを追加するときもこれを尊重し、クエリ付き URL とログの取り扱いに注意してください。
+公開集計は最大100ユーザーまで5分間再利用します。公開カードの SVG は `stale-while-revalidate` 付きで返すため、期限（言語カード5分・42 カード30分）を過ぎても CDN が直前の画像を最大1日返し、裏で更新します。GitHub の画像プロキシは数秒で取得を打ち切るので、訪問者に集計を待たせないための設定です。非公開のレスポンスとエラーは共有キャッシュに保存しない設定です。CDN・リバースプロキシを追加するときもこれを尊重し、クエリ付き URL とログの取り扱いに注意してください。
 
 GitHub API のレート制限・失効した連携・存在しないユーザー・通信失敗は日本語のエラーとして返します。多数のリポジトリは集計に時間がかかるため、ホストの実行時間上限も確認してください。1プロセスの同時集計は最大4件で、超過時は429を返します。本番公開時はホスト側のWAF・IPレート制限も設定してください。
 
@@ -166,5 +199,9 @@ GitHub API のレート制限・失効した連携・存在しないユーザー
 - `app/lib/languageStatsRequest.ts`：公開／非公開の権限境界
 - `app/lib/cardToken.ts`：集計用トークンの暗号化
 - `app/lib/renderLanguageCard.ts`：安全な SVG 描画
+- `app/api/42.svg/route.ts`：42 カードのエンドポイント
+- `app/lib/fortyTwoApi.ts`：42 API の認証・取得・キャッシュ・表示対象の制限
+- `app/lib/fortyTwoStats.ts`：42 のレスポンスの正規化
+- `app/lib/renderFortyTwoCard.ts`：42 カードの SVG 描画
 - `auth.ts`：GitHub OAuth
 - `tests/`：集計・認証境界・描画の回帰テスト

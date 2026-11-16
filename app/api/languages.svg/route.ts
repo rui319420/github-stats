@@ -3,6 +3,7 @@ import { auth } from "../../../auth";
 import { getCustomizedLanguageStatsForRequest } from "../../lib/languageStatsRequest";
 import { parseBooleanParam } from "../../lib/githubLanguages";
 import { getApiError } from "../../lib/apiError";
+import { PRIVATE_CACHE_CONTROL, publicImageCacheControl } from "../../lib/cacheControl";
 import { parseCardOptions, renderErrorSvg, renderStatsSvg } from "../../lib/renderLanguageCard";
 
 export const runtime = "nodejs";
@@ -13,8 +14,8 @@ function svgResponse(svg: string, status = 200, isPrivate = false, retryAfter?: 
     headers: {
       "Content-Type": "image/svg+xml; charset=utf-8",
       "Cache-Control": status !== 200 || isPrivate
-        ? "private, no-store"
-        : "public, max-age=300, s-maxage=300",
+        ? PRIVATE_CACHE_CONTROL
+        : publicImageCacheControl(300),
       "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",

@@ -94,3 +94,40 @@ GitHub READMEの画像（HTML img）として参照するSVGは対話イベン�
 - `app/lib/languageCardLayout.ts`
 - `app/lib/languageStats.ts`
 - `app/lib/renderLanguageCard.ts`
+
+## 2026-11-16 — 42 カードの表示対象を許可リストに限定
+
+### Context
+42 API のプロフィール（レベル・課題・スキル・コアリション）を `/api/42.svg` で配信する機能を追加した。
+
+### Finding
+Client Credentials のトークンは 42 の全ユーザーを参照できる。`login` を自由に受け付けると、このデプロイが他人の 42 データを匿名で取得できるプロキシになり、毎秒2リクエストの上限も第三者に消費される。
+
+### Decision
+`FORTYTWO_LOGIN` に登録したログインだけを配信し、それ以外は 403 とする。レスポンスは必要な項目だけに正規化し、メール・在席状況などは保持しない。成功結果は30分再利用し、失敗は保持しない。上流のエラー本文は返さず、固定の日本語メッセージに置き換える。コアリションの取得失敗は致命的にせず、既定のアクセント色で描画する。
+
+### Related files
+- `app/lib/fortyTwoApi.ts`
+- `app/lib/fortyTwoStats.ts`
+- `app/lib/renderFortyTwoCard.ts`
+- `app/api/42.svg/route.ts`
+
+## 2026-11-16 — README の画像が表示されないことがある
+
+### Context
+GitHub のプロフィールを開いたとき、言語カードが壊れた画像になることがあった。
+
+### Finding
+GitHub の画像プロキシは数秒で取得を打ち切る。`s-maxage=300` だけでは、5分以上アクセスがないと次の訪問者がコールドスタートと集計（32リポジトリで約1.4〜3秒）を待つことになり、打ち切りに掛かりやすい。200 以外のエラー SVG も表示されない。
+
+### Decision
+公開カードの SVG に `stale-while-revalidate=86400` を付け、期限切れ後も CDN が直前の画像を返して裏で更新する。非公開のレスポンスとエラーは従来どおり `private, no-store`。JSON API はプレビューの即時性を優先して変更しない。
+
+### Reason
+実行環境を移しても集計時間は残る。訪問者の経路から集計を外すほうが効果が大きく、変更も小さい。
+
+### Related files
+- `app/lib/cacheControl.ts`
+- `app/api/languages.svg/route.ts`
+- `app/api/42.svg/route.ts`
+
