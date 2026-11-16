@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getAllowedLogins, getFortyTwoStats, resetFortyTwoCacheForTests, resolveLogin } from "../app/lib/fortyTwoApi";
+import { credential, getAllowedLogins, getFortyTwoStats, resetFortyTwoCacheForTests, resolveLogin } from "../app/lib/fortyTwoApi";
 import { FORTY_TWO_ACCENT, normalizeFortyTwoUser } from "../app/lib/fortyTwoStats";
 import { levelProgress, parseFortyTwoCardOptions, renderFortyTwoSvg } from "../app/lib/renderFortyTwoCard";
 import { ApiError } from "../app/lib/apiError";
@@ -125,4 +125,11 @@ test("getFortyTwoStats hides upstream details and does not cache failures", asyn
     String(input).endsWith("/oauth/token") ? Response.json({ access_token: "t", expires_in: 7200 }) : Response.json(user)) as typeof fetch;
   assert.equal((await getFortyTwoStats("alice", working)).login, "alice");
   resetFortyTwoCacheForTests();
+});
+
+test("credential drops pasted whitespace and quotes", () => {
+  assert.equal(credential(" u-abc\n"), "u-abc");
+  assert.equal(credential('"s-abc"'), "s-abc");
+  assert.equal(credential("'s-abc' "), "s-abc");
+  assert.equal(credential(undefined), "");
 });

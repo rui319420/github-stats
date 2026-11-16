@@ -64,7 +64,12 @@ async function request(fetchImpl: Fetch, url: string, init: RequestInit): Promis
     // Never surface upstream exception text: it can contain request details.
     throw new ApiError("42 API からの応答がありませんでした。再試行してください。", 504);
   }
-  if (!response.ok) throw upstreamError(response.status, response.headers.get("retry-after"));
+  if (!response.ok) {
+    // Status and path only: enough to tell bad credentials (token 401) from a
+    // blocked or missing resource, without logging secrets or response bodies.
+    console.error(`[42] ${init.method ?? "GET"} ${new URL(url).pathname} -> ${response.status}`);
+    throw upstreamError(response.status, response.headers.get("retry-after"));
+  }
   try {
     return await response.json();
   } catch {
@@ -72,10 +77,16 @@ async function request(fetchImpl: Fetch, url: string, init: RequestInit): Promis
   }
 }
 
+// Values pasted into a host's settings often carry a trailing newline or the
+// quotes from an .env line; 42 rejects those as invalid credentials.
+export function credential(value: string | undefined): string {
+  return (value ?? "").trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+}
+
 async function getToken(fetchImpl: Fetch): Promise<string> {
   if (token && token.expiresAt > Date.now()) return token.value;
-  const clientId = process.env.FORTYTWO_CLIENT_ID;
-  const clientSecret = process.env.FORTYTWO_CLIENT_SECRET;
+  const clientId = credential(process.env.FORTYTWO_CLIENT_ID);
+  const clientSecret = credential(process.env.FORTYTWO_CLIENT_SECRET);
   if (!clientId || !clientSecret) {
     throw new ApiError("42 カードが未設定です。FORTYTWO_CLIENT_ID と FORTYTWO_CLIENT_SECRET を設定してください。", 503);
   }
@@ -83,6 +94,12 @@ async function getToken(fetchImpl: Fetch): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }),
+  }).catch((error: unknown) => {
+    // Shape only, never the values: shows a swapped, truncated or mispasted
+    // credential in the host's logs.
+    console.error(`[42] credentials: id length=${clientId.length} prefix=${clientId.startsWith("u-")}, `
+      + `secret length=${clientSecret.length} prefix=${clientSecret.startsWith("s-")}`);
+    throw error;
   }) as { access_token?: unknown; expires_in?: unknown } | null;
   if (typeof payload?.access_token !== "string" || !payload.access_token) {
     throw new ApiError("42 API の認証に失敗しました。アプリの UID と SECRET を確認してください。", 502);
